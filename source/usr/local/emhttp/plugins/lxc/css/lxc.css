@@ -612,3 +612,241 @@ h3.startArray, h2.noContainers {
   opacity: 0.6;
   font-size: 11px;
 }
+
+/* ========================================================================
+   LXC v2 - theme aware palette (Unraid 6.12+/7 Dynamix variables)
+   Every token has a fallback, so older themes keep working unchanged.
+   ======================================================================== */
+:root {
+  --lxv2-surface: var(--mild-background-color, var(--component-bg-color, rgba(128, 128, 128, 0.07)));
+  --lxv2-surface-2: var(--background-color, var(--component-bg-color, rgba(128, 128, 128, 0.12)));
+  --lxv2-text: var(--text-color, inherit);
+  --lxv2-line: var(--border-color, rgba(128, 128, 128, 0.28));
+  --lxv2-accent: var(--link-text-color, var(--blue, #408cdc));
+  --lxv2-good: var(--green, #2e9e4f);
+  --lxv2-warn: var(--orange, #d38b1f);
+  --lxv2-bad: var(--red, #d9534f);
+}
+
+.lxcv2-page {
+  color: var(--lxv2-text);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.lxcv2-header {
+  background: var(--lxv2-surface);
+  border: 1px solid var(--lxv2-line);
+  border-left: 3px solid var(--lxv2-accent);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.lxcv2-title {
+  font-size: 22px;
+  letter-spacing: 0.2px;
+}
+
+.lxcv2-subtitle,
+.lxcv2-muted {
+  color: var(--lxv2-text);
+  opacity: 0.72;
+}
+
+.lxcv2-tabs {
+  border-color: var(--lxv2-line);
+  gap: 2px;
+}
+
+.lxcv2-tab {
+  border-radius: 6px 6px 0 0;
+}
+
+.lxcv2-tab:hover {
+  background: var(--lxv2-surface);
+}
+
+.lxcv2-tab.active {
+  border-color: var(--lxv2-line);
+  background: var(--lxv2-surface);
+  box-shadow: inset 0 -2px 0 var(--lxv2-accent);
+}
+
+.lxcv2-panel {
+  padding: 16px 18px 18px;
+  border: 1px solid var(--lxv2-line);
+  border-radius: 0 0 8px 8px;
+  background: var(--lxv2-surface-2);
+}
+
+.lxcv2-panel dt {
+  width: 210px;
+  opacity: 0.9;
+}
+
+.lxcv2-panel dd input[type="text"],
+.lxcv2-panel dd input[type="number"],
+.lxcv2-panel dd input[type="password"],
+.lxcv2-panel dd select,
+#rawConfig {
+  box-sizing: border-box;
+  padding: 5px 8px;
+  border: 1px solid var(--lxv2-line);
+  border-radius: 4px;
+  background: var(--lxv2-surface);
+  color: var(--lxv2-text);
+}
+
+.lxcv2-panel input:focus,
+.lxcv2-panel select:focus,
+#rawConfig:focus {
+  border-color: var(--lxv2-accent);
+  outline: 1px solid var(--lxv2-accent);
+  outline-offset: 0;
+}
+
+.lxcv2-section {
+  border-color: var(--lxv2-line);
+  color: var(--lxv2-text);
+}
+
+.lxcv2-card {
+  background: var(--lxv2-surface);
+  border-color: var(--lxv2-line);
+  border-radius: 8px;
+}
+
+.lxcv2-card-head {
+  background: var(--lxv2-surface-2);
+  border-color: var(--lxv2-line);
+}
+
+.lxcv2-table th,
+.lxcv2-table td {
+  border-color: var(--lxv2-line);
+}
+
+.lxcv2-table th {
+  color: var(--lxv2-text);
+  opacity: 0.75;
+}
+
+.lxcv2-hint {
+  color: var(--lxv2-text);
+  background: rgba(64, 140, 220, 0.12);
+  border-left-color: var(--lxv2-accent);
+}
+
+.lxcv2-hint.warning {
+  background: rgba(217, 83, 79, 0.12);
+  border-left-color: var(--lxv2-bad);
+}
+
+.lxcv2-btn {
+  color: var(--lxv2-text);
+  background: var(--lxv2-surface);
+  border-color: var(--lxv2-line);
+  border-radius: 5px;
+}
+
+.lxcv2-btn.primary {
+  border-color: var(--lxv2-accent);
+  box-shadow: inset 0 0 0 1px var(--lxv2-accent);
+  font-weight: bold;
+}
+
+.lxcv2-btn:hover,
+.lxcv2-icon-btn:hover {
+  background: var(--lxv2-surface-2);
+  border-color: var(--lxv2-accent);
+}
+
+#rawConfig {
+  border-radius: 6px;
+  padding: 12px;
+  line-height: 1.55;
+}
+
+.lxcv2-state-running { color: var(--lxv2-good); background: rgba(46, 158, 79, 0.16); }
+.lxcv2-state-frozen { color: var(--lxv2-warn); background: rgba(211, 139, 31, 0.16); }
+.lxcv2-state-stopped { color: var(--lxv2-bad); background: rgba(217, 83, 79, 0.16); }
+
+.lxcv2-row-icon.ok { color: var(--lxv2-good); }
+.lxcv2-row-icon.danger { color: var(--lxv2-bad); }
+.lxcv2-icon-btn.ok { color: var(--lxv2-good); }
+.lxcv2-icon-btn.danger { color: var(--lxv2-bad); }
+
+/* Stat meters: label outside the bar, always readable in both themes */
+.lxcv2-meter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 160px;
+  width: 100%;
+}
+
+.lxcv2-meter {
+  flex: 1 1 auto;
+  min-width: 70px;
+  max-width: 240px;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--lxv2-surface);
+  border: 1px solid var(--lxv2-line);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.lxcv2-meter-fill {
+  border-radius: 6px 0 0 6px;
+  background: linear-gradient(90deg, var(--lxv2-good) 0%, #7ec850 100%);
+}
+
+.lxcv2-meter-medium .lxcv2-meter-fill {
+  background: linear-gradient(90deg, var(--lxv2-warn) 0%, #f0b429 100%);
+}
+
+.lxcv2-meter-high .lxcv2-meter-fill {
+  background: linear-gradient(90deg, var(--lxv2-bad) 0%, #ff7b54 100%);
+}
+
+.lxcv2-meter-value {
+  flex: 0 0 auto;
+  min-width: 118px;
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--lxv2-text);
+  opacity: 0.9;
+  white-space: nowrap;
+}
+
+.lxcv2-na {
+  color: var(--lxv2-text);
+  opacity: 0.55;
+}
+
+/* Table list polish */
+#lxc_table thead th {
+  border-bottom: 2px solid var(--lxv2-line);
+  color: var(--lxv2-text);
+  opacity: 0.8;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+#lxc_table tbody tr:hover {
+  background: var(--lxv2-surface);
+}
+
+.lxcv2-toast {
+  border: 1px solid var(--lxv2-line);
+}
+
+/* Keyboard accessibility */
+.lxcv2-tab:focus-visible,
+.lxcv2-btn:focus-visible,
+.lxcv2-icon-btn:focus-visible,
+.lxcv2-row-icon:focus-visible {
+  outline: 2px solid var(--lxv2-accent);
+  outline-offset: 2px;
+}

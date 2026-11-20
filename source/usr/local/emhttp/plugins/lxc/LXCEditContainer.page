@@ -77,7 +77,6 @@ if ($csrfToken === '') {
 ?>
 <link rel="stylesheet" href="<?autov('/plugins/lxc/css/lxc.css')?>">
 <script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
-<script src="<?autov('/plugins/lxc/js/lxc-edit.js')?>"></script>
 
 <script>
   window.LXCV2_EDIT = {
@@ -335,3 +334,7 @@ if ($csrfToken === '') {
 </div>
 
 <div id="lxcv2-toast" class="lxcv2-toast"></div>
+
+<!-- Loaded last: the script binds the tabs and renders the NIC cards, so the
+     DOM and window.LXCV2_EDIT must already exist. -->
+<script src="<?autov('/plugins/lxc/js/lxc-edit.js')?>"></script>

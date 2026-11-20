@@ -43,9 +43,10 @@ foreach (glob($fakeBin . '/*') ?: [] as $bin) {
 }
 putenv('PATH=' . $fakeBin . ':' . getenv('PATH'));
 
-function autov(string $path): string
+// In the webGui, autov() prints the cache-busted path directly.
+function autov(string $path): void
 {
-    return $path;
+    echo $path;
 }
 
 function mk_option(string $selected, string $value, string $label): string
@@ -54,6 +55,9 @@ function mk_option(string $selected, string $value, string $label): string
 }
 
 $pluginDir = __DIR__ . '/../source/usr/local/emhttp/plugins/lxc';
+
+$css = file_get_contents($pluginDir . '/css/lxc.css');
+check('CSS uses the Unraid theme variables', strpos($css, '--mild-background-color') !== false && strpos($css, '--border-color') !== false);
 
 // The pages require files by their absolute Unraid path.
 $emhttpPlugin = '/usr/local/emhttp/plugins/lxc';
@@ -144,6 +148,9 @@ foreach ($pages as $page => $query) {
             check('nic json has static ipv4', strpos($output, '192.168.1.50/24') !== false);
             check('detects distribution', strpos($output, 'debian.png') !== false);
             check('description rendered', strpos($output, 'Demo container') !== false);
+            $scriptPos = strpos($output, 'lxc-edit.js');
+            $tabsPos = strpos($output, 'lxcv2-tab');
+            check('editor script loads after the tabs', $scriptPos !== false && $tabsPos !== false && $scriptPos > $tabsPos);
         }
 
         if ($page === 'LXC.page') {
@@ -156,6 +163,7 @@ foreach ($pages as $page => $query) {
             check('stats skip unchanged values', strpos($output, 'function lxcSet') !== false);
             check('stats render meters', strpos($output, 'lxcv2-meter-fill') !== false);
             check('no direct JSON.parse on response', strpos($output, 'JSON.parse(response)') === false);
+            check('meter label outside the bar', strpos($output, 'lxcv2-meter-value') !== false);
         }
 
         if ($page === 'LXCAddContainer.page') {

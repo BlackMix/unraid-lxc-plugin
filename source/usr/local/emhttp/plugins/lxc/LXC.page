@@ -402,9 +402,12 @@ if (count($differences) > 0) {
   function lxcMeter(percent, label) {
     var p = Math.max(0, Math.min(100, Math.round(percent)));
     var level = p >= 85 ? 'high' : (p >= 60 ? 'medium' : 'low');
-    return '<div class="lxcv2-meter lxcv2-meter-' + level + '">' +
-             '<div class="lxcv2-meter-fill" style="width:' + p + '%"></div>' +
-             '<span class="lxcv2-meter-label">' + lxcEscape(label) + '</span></div>';
+    return '<div class="lxcv2-meter-row">' +
+             '<div class="lxcv2-meter lxcv2-meter-' + level + '">' +
+               '<div class="lxcv2-meter-fill" style="width:' + p + '%"></div>' +
+             '</div>' +
+             '<span class="lxcv2-meter-value">' + lxcEscape(label) + '</span>' +
+           '</div>';
   }
 
   function lxcSet(id, html, isZero) {

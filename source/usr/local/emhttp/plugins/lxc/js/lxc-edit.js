@@ -2,6 +2,8 @@
 (function () {
   'use strict';
 
+  function init() {
+
   var EDIT = window.LXCV2_EDIT || { name: '', state: '', nics: [], links: [], hostMemory: 0 };
   var AJAX = '/plugins/lxc/include/ajax.php';
 
@@ -390,5 +392,15 @@
   var initialTab = (window.location.hash || '').replace('#', '');
   if (initialTab && document.getElementById('tab-' + initialTab)) {
     activateTab(initialTab);
+  }
+
+  }
+
+  // Defensive: the page loads this file at the end of the body, but keep the
+  // handler working even if it ends up in <head> after a theme/custom change.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
   }
 })();
