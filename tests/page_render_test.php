@@ -164,6 +164,7 @@ foreach ($pages as $page => $query) {
             check('stats skip unchanged values', strpos($output, 'function lxcSet') !== false);
             check('stats render sparklines', strpos($output, 'lxcv2-spark') !== false);
             check('stats keep update guard', strpos($output, 'function lxcAccept') !== false);
+            check('stats do not shadow window.history', strpos($output, 'var history =') === false && strpos($output, 'lxcHistory') !== false);
             check('stats history capped', strpos($output, 'series.length > 24') !== false);
             check('sparkline columns sized', strpos($output, "width: 210px; min-width: 210px;") !== false);
             check('no direct JSON.parse on response', strpos($output, 'JSON.parse(response)') === false);

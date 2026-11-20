@@ -370,7 +370,7 @@ if (count($differences) > 0) {
   var setMemory = <?= json_encode($setcontainerMem); ?>;
   var cpuCount = <?= (int) $cpu_count ?> || 1;
   var lastHtml = Object.create(null);
-  var history = { cpu: Object.create(null), mem: Object.create(null) };
+  var lxcHistory = { cpu: Object.create(null), mem: Object.create(null) };
 
   function lxcEscape(value) {
     return String(value === null || value === undefined ? '' : value)
@@ -403,7 +403,7 @@ if (count($differences) > 0) {
   // First sample is accepted even when it is 0 (clears the loading spinner).
   // After that, 0 and repeated values are ignored so the chart does not flicker.
   function lxcAccept(kind, name, value) {
-    var store = history[kind];
+    var store = lxcHistory[kind];
     var series = store[name] || (store[name] = []);
     if (!series.length) {
       series.push(value);
@@ -420,7 +420,7 @@ if (count($differences) > 0) {
   }
 
   function lxcSpark(kind, name, level) {
-    var series = history[kind][name] || [0];
+    var series = lxcHistory[kind][name] || [0];
     var w = 72;
     var h = 20;
     var color = level === 'high' ? 'var(--lxv2-bad)'
