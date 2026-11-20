@@ -3,11 +3,11 @@
   <!ENTITY name      "lxc">
   <!ENTITY title     "LXC v2">
   <!ENTITY author    "BlackMix">
-  <!ENTITY version   "2026.11.23">
+  <!ENTITY version   "2026.11.24">
   <!ENTITY launch    "Settings/LXCSettings">
   <!ENTITY gitURL    "https://github.com/&author;/unraid-&name;-plugin/raw/master">
   <!ENTITY pluginURL "&gitURL;/&name;.plg">
-  <!ENTITY md5       "5635fef0f9f18b87ce3e461c5310140f">
+  <!ENTITY md5       "8332830eb0e57b382f23eb8addeb5ee9">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
   <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 ]>
@@ -16,7 +16,7 @@
 
 <CHANGES>
 
-###2026.11.23
+###2026.11.24
 - LXC v2: reimplemented package on top of the previous LXC plugin, keeping the
   same internal id (lxc), the same configuration layout (/boot/config/plugins/lxc)
   and the same runtime packages so existing installations upgrade in place
@@ -45,7 +45,9 @@
 - Fix: the container editor script now loads after the DOM, so the
   General/Network/Devices/SSH/Advanced tabs and the NIC cards work again
 - UI: theme aware palette built on the Dynamix CSS variables (light and dark
-  themes), better contrast and stat meters with the value outside the bar
+  themes), better contrast and CPU/memory sparkline charts with 24 samples.
+  The first sample may be zero; later zeros and repeated values are skipped
+  so the chart stays still when nothing changed.
 - Runtime binaries: LXC_BINARY_SOURCE=auto|fork in plugin.cfg; the upstream
   fallback is now written only to syslog and a release-check.sh helper validates
   the LXC assets published on your GitHub release

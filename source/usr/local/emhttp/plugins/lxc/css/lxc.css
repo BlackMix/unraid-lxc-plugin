@@ -890,3 +890,39 @@ h3.startArray, h2.noContainers {
   outline: 2px solid var(--lxv2-accent) !important;
   outline-offset: 2px !important;
 }
+
+/* Compact stat sparklines (CPU / memory history, last 24 samples) */
+.lxcv2-stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 130px;
+  max-width: 200px;
+  margin: 2px 0;
+}
+
+.lxcv2-spark {
+  width: 72px;
+  height: 20px;
+  flex: 0 0 72px;
+  overflow: visible;
+}
+
+.lxcv2-stat-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: monospace;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--lxv2-text);
+  opacity: 0.9;
+}
+
+.lxcv2-stat-value[title] {
+  cursor: help;
+}

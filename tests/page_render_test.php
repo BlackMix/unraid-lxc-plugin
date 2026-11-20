@@ -162,9 +162,12 @@ foreach ($pages as $page => $query) {
             check('actions are anchors, not buttons', strpos($output, '<button type="button" class="lxcv2-row-icon') === false);
             check('stats tolerate parsed JSON', strpos($output, 'lxcAsArray') !== false);
             check('stats skip unchanged values', strpos($output, 'function lxcSet') !== false);
-            check('stats render meters', strpos($output, 'lxcv2-meter-fill') !== false);
+            check('stats render sparklines', strpos($output, 'lxcv2-spark') !== false);
+            check('stats keep update guard', strpos($output, 'function lxcAccept') !== false);
+            check('stats history capped', strpos($output, 'series.length > 24') !== false);
+            check('sparkline columns sized', strpos($output, "width: 210px; min-width: 210px;") !== false);
             check('no direct JSON.parse on response', strpos($output, 'JSON.parse(response)') === false);
-            check('meter label outside the bar', strpos($output, 'lxcv2-meter-value') !== false);
+            check('stat label is width constrained', strpos($css, '.lxcv2-stat-value') !== false && strpos($css, 'max-width: 120px') !== false);
         }
 
         if ($page === 'LXCAddContainer.page') {
