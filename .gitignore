@@ -1,0 +1,10 @@
+# Credenciais — nunca versionar
+.env
+.env.*
+!.env.example
+
+# Arquivos gerados / locais
+*.log
+.DS_Store
+._*
+*.tmp
