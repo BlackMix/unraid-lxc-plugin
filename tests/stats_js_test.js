@@ -94,4 +94,11 @@ assert.notStrictEqual(element('cpu_usage-ct1').innerHTML, beforeCpu, 'CPU change
 assert.ok(element('cpu_usage-ct1').innerHTML.includes('20%'), 'CPU value did not update');
 assert.ok(element('memoryUse-ct1').innerHTML.includes('1GiB / 2GiB'), 'memory value did not update');
 
+
+// Even a completely corrupted history object must recover.
+sandbox.lxcHistory = undefined;
+payload = [{ name: 'ct1', cpu_usage: '10', memoryUse: '256MiB', ips: '', totalBytes: '' }];
+const recovered = run();
+assert.ok(recovered.cpu.includes('lxcv2-spark'), 'script did not recover from a missing history object');
+
 console.log('ALL STATS JS TESTS PASSED');

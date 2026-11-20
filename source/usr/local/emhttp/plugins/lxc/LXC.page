@@ -372,6 +372,18 @@ if (count($differences) > 0) {
   var lastHtml = Object.create(null);
   var lxcHistory = { cpu: Object.create(null), mem: Object.create(null) };
 
+  if (!Array.isArray(containerNames)) containerNames = [];
+
+  // Never trust the state of this object: a stale cached page may still be
+  // running an older script, so always recreate the bucket if it is missing.
+  function lxcStore(kind) {
+    if (!lxcHistory || typeof lxcHistory !== 'object') lxcHistory = Object.create(null);
+    if (!lxcHistory[kind]) lxcHistory[kind] = Object.create(null);
+    return lxcHistory[kind];
+  }
+
+  console.info('[LXC v2] live stats script loaded (2026.11.26)');
+
   function lxcEscape(value) {
     return String(value === null || value === undefined ? '' : value)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -403,7 +415,7 @@ if (count($differences) > 0) {
   // First sample is accepted even when it is 0 (clears the loading spinner).
   // After that, 0 and repeated values are ignored so the chart does not flicker.
   function lxcAccept(kind, name, value) {
-    var store = lxcHistory[kind];
+    var store = lxcStore(kind);
     var series = store[name] || (store[name] = []);
     if (!series.length) {
       series.push(value);
@@ -420,7 +432,7 @@ if (count($differences) > 0) {
   }
 
   function lxcSpark(kind, name, level) {
-    var series = lxcHistory[kind][name] || [0];
+    var series = lxcStore(kind)[name] || [0];
     var w = 72;
     var h = 20;
     var color = level === 'high' ? 'var(--lxv2-bad)'
