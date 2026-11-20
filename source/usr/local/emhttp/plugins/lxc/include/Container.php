@@ -2,6 +2,7 @@
 
 require_once 'Settings.php';
 require_once 'Snapshot.php';
+require_once __DIR__ . '/Devices.php';
 class Container {
 
   public $name;
@@ -38,8 +39,8 @@ class Container {
     $this->autostart = getVariable($this->config, 'lxc.start.auto');
     $this->mac = getVariable($this->config, 'lxc.net.0.hwaddr');
     $this->snapshots = $this->getSnapshots();
+    $this->backup_path = realpath((string) ($this->settings->backup_path ?? '')) ?: '';
     $this->backups = $this->getBackups();
-    $this->backup_path = realpath($this->settings->backup_path);
     if ($this->state === "RUNNING") {
       if (file_exists('/tmp/lxc/containers/' . $this->name)) {
         $container_stats = parse_ini_file('/tmp/lxc/containers/' . $this->name);
@@ -91,8 +92,11 @@ class Container {
     }
     $this->totalBytes = getContainerStats($this->name, "Total bytes");
     $this->pid = getContainerStats($this->name, "PID");
-    $starttime = shell_exec("ps -p " . $this->pid . " -o lstart --no-headers");
-    if ($starttime !== null){
+    $starttime = null;
+    if (!empty($this->pid)) {
+      $starttime = shell_exec("ps -p " . $this->pid . " -o lstart --no-headers");
+    }
+    if (!empty($starttime)){
       $timenow = time();
       $starttime = strtotime($starttime);
       $seconds_elapsed = $timenow - $starttime;
@@ -145,7 +149,10 @@ class Container {
 
   private function getBackups() {
     $backups = array();
-    exec("ls -1 " . realpath($this->settings->backup_path) . "/" . $this->name . "/ | grep -E \"^" . $this->name . "_[0-9]{2}\.[0-9]{2}\.[0-9]{2}_.+\.tar\.xz$\" 2>/dev/null", $backupList);
+    if (empty($this->backup_path)) {
+      return $backups;
+    }
+    exec("ls -1 " . $this->backup_path . "/" . $this->name . "/ | grep -E \"^" . $this->name . "_[0-9]{2}\.[0-9]{2}\.[0-9]{2}_.+\.tar\.xz$\" 2>/dev/null", $backupList);
     if (isset($backupList)) {
       foreach ($backupList as $backup){
         $pattern = '/^(.*?)_(\d+\.\d+\.\d+)_(\d{4}-\d{2}-\d{2})(\.tar\.xz)$/';
@@ -170,14 +177,37 @@ class Container {
   private function getCpus() {
     $cpus = getVariable($this->config, 'lxc.cgroup.cpuset.cpus');
     if (empty($cpus)) {
+      if (empty($this->pid)) {
+        return '';
+      }
       return exec("cat /proc/" . $this->pid . "/status | grep 'Cpus_allowed_list' | awk '{print $2}'");
     } else {
       return $cpus;
     }
   }
 
+  /**
+   * Short network description used by the container list and the edit page.
+   */
+  function networkSummary() {
+    require_once __DIR__ . '/Network.php';
+    $config = new ContainerConfig($this->name);
+    $parts = array();
+    foreach (Network::read($config) as $nic) {
+      $parts[] = Network::summarize($nic);
+    }
+    return implode(' | ', $parts);
+  }
+
   function startContainer() {
     exec('logger "LXC: Starting container ' . $this->name . '"');
+    // Re-resolve USB bus/device numbers before the container boots so that
+    // passthrough keeps working after a reboot or a re-plug.
+    try {
+      Devices::sync($this->name);
+    } catch (Throwable $e) {
+      exec('logger "LXC: warning: device sync failed for ' . $this->name . '"');
+    }
     exec('lxc-start ' . $this->name . ' 2>&1', $output, $retval);
   if ($retval == 1) {
       exec('logger "LXC: error: Container ' . $this->name . ' failed to start"');

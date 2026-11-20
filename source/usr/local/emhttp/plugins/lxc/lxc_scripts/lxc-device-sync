@@ -1,0 +1,34 @@
+#!/usr/bin/env php
+<?php
+/**
+ * LXC v2 - re-resolve device passthrough rules for every container.
+ *
+ * USB bus/device numbers change on every re-plug or reboot, so the generated
+ * `lxc.mount.entry` lines must be refreshed. Called from udev when a USB device
+ * is added and from lxc-startup.sh before the autostart runs.
+ */
+$include = dirname(__DIR__) . '/include';
+require_once $include . '/Paths.php';
+require_once $include . '/ContainerConfig.php';
+require_once $include . '/Devices.php';
+
+$changed = 0;
+$entries = glob(LxcPaths::dataPath() . '/*', GLOB_ONLYDIR) ?: [];
+
+foreach ($entries as $dir) {
+    $name = basename($dir);
+    if (!LxcPaths::isValidContainerName($name) || $name === 'cache' || $name === 'custom-icons') {
+        continue;
+    }
+
+    try {
+        if (Devices::sync($name)) {
+            $changed++;
+            @exec('logger ' . escapeshellarg('LXC: device passthrough re-synced for ' . $name));
+        }
+    } catch (Throwable $e) {
+        @exec('logger ' . escapeshellarg('LXC: warning: device sync failed for ' . $name . ': ' . $e->getMessage()));
+    }
+}
+
+exit(0);

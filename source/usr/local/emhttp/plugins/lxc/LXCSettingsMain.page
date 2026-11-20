@@ -24,6 +24,16 @@ body{-webkit-overflow-scrolling:touch}
 <link rel="stylesheet" href="/plugins/lxc/css/lxc.css">
 <script src="/plugins/lxc/js/lxc.js"></script>
 
+<div class="lxcv2-hint">
+  <i class="fa fa-cubes"></i>
+  <span>
+    <b>LXC v2</b> &mdash; networking (DHCP, static IPv4/IPv6, VLAN), GPU and USB passthrough,
+    SSH provisioning and resource limits are configured per container in the
+    <b>container editor</b> (pencil icon on the <a href="/LXC">LXC v2</a> page).
+    Source and releases: <a href="https://github.com/BlackMix/unraid-lxc-plugin" target="_blank" rel="noopener noreferrer">github.com/BlackMix/unraid-lxc-plugin</a>
+  </span>
+</div>
+
 <form markdown="1" id="changecfg" method="post">
 _(Enable LXC)_:
 : <select id="SERVICE" name="SERVICE">

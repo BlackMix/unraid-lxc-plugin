@@ -29,7 +29,7 @@ Cond="$var['fsState'] == 'Started' && version_compare(parse_ini_file('/etc/unrai
 
 require_once '/usr/local/emhttp/plugins/lxc/include/Container.php';
 
-$pluginname = "LXC";
+$pluginname = "LXC v2";
 
 $container_count = count(getAllContainers());
 $active_count = count(getActiveContainers());

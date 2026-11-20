@@ -14,6 +14,20 @@ function postAction(name, id) {
   });
 }
 
+// Inline action buttons in the container list (LXC v2)
+function lxcRowAction(action, name) {
+  if (typeof showSpinner === 'function') {
+    showSpinner();
+  }
+  $.post("/plugins/lxc/include/ajax.php", {
+    'lxc': '',
+    'action': action,
+    'container': name
+  }).always(function () {
+    parent.window.location.reload();
+  });
+}
+
 function saveConfig(name) {
   swal({
     title: "Saving",
@@ -160,7 +174,7 @@ function showDropdown(contName) {
 }
 
 // Function that creates a new container
-function createContainer(name, description, distribution, release, startcont, autostart, mac) {
+function createContainer(name, description, distribution, release, startcont, autostart, mac, network) {
   let statusInterval;
 
   Shadowbox.open({
@@ -187,7 +201,8 @@ function createContainer(name, description, distribution, release, startcont, au
         'release': release,
         'startcont': startcont,
         'autostart': autostart,
-        'mac': mac
+        'mac': mac,
+        'network': network ? JSON.stringify(network) : ''
       },
       xhr: function() {
         // get the native XmlHttpRequest object
@@ -566,8 +581,22 @@ $(function() {
     let startcont = this.contStart.checked;
     let autostart = this.contAutostart.checked;
     let mac = this.contMac.value;
+    let network = null;
+    if (this.contNetLink) {
+      network = {
+        type: this.contNetType.value,
+        link: this.contNetLink.value,
+        vlanId: this.contNetVlan.value,
+        ipv4Mode: this.contIpv4Mode.value,
+        ipv4Address: this.contIpv4Address.value,
+        ipv4Gateway: this.contIpv4Gateway.value,
+        ipv6Mode: this.contIpv6Mode.value,
+        ipv6Address: this.contIpv6Address.value,
+        ipv6Gateway: this.contIpv6Gateway.value
+      };
+    }
 
-    createContainer(name, description, distribution, release, startcont, autostart, mac);
+    createContainer(name, description, distribution, release, startcont, autostart, mac, network);
   });
 
   // Listener for copying container

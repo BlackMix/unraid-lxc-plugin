@@ -121,3 +121,377 @@ h3.startArray, h2.noContainers {
 .spoiler:not([open]) summary::after {
   content: attr(data-close);
 }
+
+/* ========================================================================
+   LXC v2 - container editor and inline row actions
+   Uses translucent colours so the white and the dark theme both work.
+   ======================================================================== */
+
+.lxcv2-row-actions {
+  white-space: nowrap;
+}
+
+.lxcv2-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin: 0 2px;
+  padding: 0;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  border-radius: 4px;
+  background: rgba(128, 128, 128, 0.10);
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  text-decoration: none;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.lxcv2-icon-btn:hover {
+  background: rgba(128, 128, 128, 0.25);
+  border-color: rgba(128, 128, 128, 0.55);
+}
+
+.lxcv2-icon-btn:active {
+  transform: scale(0.94);
+}
+
+.lxcv2-icon-btn.ok {
+  color: #2e9e4f;
+  border-color: rgba(46, 158, 79, 0.45);
+}
+
+.lxcv2-icon-btn.danger {
+  color: #d9534f;
+  border-color: rgba(217, 83, 79, 0.45);
+}
+
+.lxcv2-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding-bottom: 40px;
+}
+
+.lxcv2-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  border-radius: 6px;
+  background: rgba(128, 128, 128, 0.06);
+}
+
+.lxcv2-header img {
+  border-radius: 6px;
+}
+
+.lxcv2-title {
+  font-size: 20px;
+  font-weight: bold;
+  line-height: 1.2;
+}
+
+.lxcv2-subtitle {
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.lxcv2-header-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+
+.lxcv2-state {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+}
+
+.lxcv2-state-running {
+  color: #2e9e4f;
+  background: rgba(46, 158, 79, 0.15);
+}
+
+.lxcv2-state-frozen {
+  color: #d38b1f;
+  background: rgba(211, 139, 31, 0.15);
+}
+
+.lxcv2-state-stopped {
+  color: #d9534f;
+  background: rgba(217, 83, 79, 0.15);
+}
+
+.lxcv2-muted {
+  opacity: 0.7;
+  font-size: 12px;
+}
+
+.lxcv2-mono {
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.lxcv2-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+  margin-bottom: 16px;
+}
+
+.lxcv2-tab {
+  padding: 9px 16px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.lxcv2-tab:hover {
+  opacity: 1;
+  background: rgba(128, 128, 128, 0.10);
+}
+
+.lxcv2-tab.active {
+  opacity: 1;
+  font-weight: bold;
+  border-color: rgba(128, 128, 128, 0.3);
+  background: rgba(128, 128, 128, 0.14);
+  margin-bottom: -1px;
+}
+
+.lxcv2-panel {
+  display: none;
+}
+
+.lxcv2-panel.active {
+  display: block;
+}
+
+.lxcv2-panel dl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px 0;
+}
+
+.lxcv2-panel dt {
+  width: 190px;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.lxcv2-panel dd {
+  margin: 0;
+  flex: 1 1 320px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.lxcv2-panel dd input[type="text"],
+.lxcv2-panel dd input[type="number"],
+.lxcv2-panel dd input[type="password"],
+.lxcv2-panel dd select {
+  min-width: 220px;
+}
+
+.lxcv2-panel dd.lxcv2-inline input[type="text"],
+.lxcv2-panel dd.lxcv2-inline input[type="number"] {
+  min-width: 150px;
+  flex: 1 1 150px;
+}
+
+.lxcv2-section {
+  margin: 22px 0 10px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+  font-size: 14px;
+}
+
+.lxcv2-card {
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  background: rgba(128, 128, 128, 0.05);
+}
+
+.lxcv2-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.lxcv2-card-body {
+  padding: 12px;
+}
+
+.lxcv2-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.lxcv2-check.disabled {
+  opacity: 0.45;
+}
+
+.lxcv2-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+}
+
+.lxcv2-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.lxcv2-table th {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  opacity: 0.8;
+}
+
+.lxcv2-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+  vertical-align: top;
+}
+
+.lxcv2-table input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+.lxcv2-hint {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  border-left: 3px solid rgba(64, 140, 220, 0.8);
+  background: rgba(64, 140, 220, 0.10);
+  border-radius: 0 4px 4px 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.lxcv2-hint.warning {
+  border-left-color: rgba(217, 83, 79, 0.85);
+  background: rgba(217, 83, 79, 0.10);
+}
+
+.lxcv2-hint code {
+  font-family: monospace;
+  font-size: 11px;
+}
+
+.lxcv2-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.lxcv2-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid rgba(128, 128, 128, 0.4);
+  border-radius: 4px;
+  background: rgba(128, 128, 128, 0.12);
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.lxcv2-btn:hover {
+  background: rgba(128, 128, 128, 0.22);
+}
+
+.lxcv2-btn.primary {
+  border-color: rgba(64, 140, 220, 0.6);
+  background: rgba(64, 140, 220, 0.20);
+}
+
+.lxcv2-btn.primary:hover {
+  background: rgba(64, 140, 220, 0.32);
+}
+
+#rawConfig {
+  width: 100%;
+  min-height: 460px;
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+  overflow: auto;
+}
+
+.lxcv2-toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  max-width: 420px;
+  padding: 12px 18px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #fff;
+  background: rgba(40, 40, 40, 0.95);
+  border-left: 4px solid #408cdc;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+  transition: opacity 160ms ease, transform 160ms ease;
+  z-index: 10000;
+}
+
+.lxcv2-toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.lxcv2-toast.ok {
+  border-left-color: #2e9e4f;
+}
+
+.lxcv2-toast.error {
+  border-left-color: #d9534f;
+}
+
+.lxcv2-error {
+  padding: 16px;
+  margin: 20px 0;
+  border-left: 4px solid #d9534f;
+  background: rgba(217, 83, 79, 0.12);
+  font-weight: bold;
+}

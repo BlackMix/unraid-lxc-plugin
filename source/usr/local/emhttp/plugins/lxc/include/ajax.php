@@ -1,159 +1,416 @@
 <?php
-require_once 'functions.php';
-require_once 'Settings.php';
-if (isset($_POST['lxc'])) {
-  $settings = new Settings();
-  switch ($_POST['action']) {
-    case 'startCONT':
-      $container = new Container($_POST['container']);
-      $container->startContainer();
-      break;
-    case 'stopCONT':
-      $container = new Container($_POST['container']);
-      $container->stopContainer();
-      break;
-    case 'startALLCONT':
-      $allContainers = getAllContainers();
-      foreach ($allContainers as $cont) {
-        if($cont->state == "STOPPED" || $cont->state == "FROZEN") {
-          $container = new Container($cont->name);
-          $container->startContainer();
-        }
-      }
-      break;
-    case 'stopALLCONT':
-      $allContainers = getAllContainers();
-      foreach ($allContainers as $cont) {
-        if($cont->state == "RUNNING" || $cont->state == "FROZEN") {
-          $container = new Container($cont->name);
-          $container->stopContainer();
-        }
-      }
-      break;
-    case 'restartCONT':
-      $container = new Container($_POST['container']);
-      $container->restartContainer();
-      break;
-    case 'freezeCONT':
-      $container = new Container($_POST['container']);
-      $container->freezeContainer();
-      break;
-    case 'freezeALLCONT':
-      $allContainers = getAllContainers();
-      foreach ($allContainers as $cont) {
-        if($cont->state == "RUNNING") {
-          $container = new Container($cont->name);
-          $container->freezeContainer();
-        }
-      }
-      break;
-    case 'unfreezeCONT':
-      $container = new Container($_POST['container']);
-      $container->unfreezeContainer();
-      break;
-    case 'unfreezeALLCONT':
-      $allContainers = getAllContainers();
-      foreach ($allContainers as $cont) {
-        if($cont->state == "FROZEN") {
-          $container = new Container($cont->name);
-          $container->unfreezeContainer();
-        }
-      }
-      break;
-    case 'killCONT':
-      $container = new Container($_POST['container']);
-      $container->killContainer();
-      break;
-    case 'autostart':
-      $container = new Container($_POST['container']);
-      if ($_POST['autostart'] == 'true') {
-        $container->setAutostart(1);
-      } else {
-        $container->setAutostart(0);
-      }
-      break;
-    case 'destroyCONT':
-      $container = new Container($_POST['container']);
-      $container->destroyContainer();
-      break;
-    case 'snapshotCONT':
-      $container = new Container($_POST['container']);
-      $container->createSnapshot();
-      break;
-    case 'deleteSNAP':
-      $container = new Container($_POST['container']);
-      $container->deleteSnapshot($_POST['snapshot']);
-      break;
-    case 'backupCONT':
-      $container = new Container($_POST['container']);
-      $container->createBackup();
-      break;
-    case 'deleteBACKUP':
-      $container = new Container($_POST['container']);
-      $container->deleteBackup($_POST['backup']);
-      break;
-    case 'createCONT':
-      createContainer($_POST['name'], $_POST['description'], $_POST['distribution'], $_POST['release'], $_POST['startcont'], $_POST['autostart'], $_POST['mac']);
-      break;
-    case 'copyCONT':
-      copyContainer($_POST['name'], $_POST['description'], $_POST['container'], $_POST['autostart'], $_POST['mac']);
-      break;
-    case 'showConfig':
-      $container = new Container($_POST['container']);
-      $container->showConfig();
-      break;
-    case 'saveConfig':
-      $updatedConfig = trim($_POST['updatedConfig']);
-      $container = $_POST['container'];
-      $containerConfig = $settings->default_path . "/" . $container . "/config";
-      file_put_contents($containerConfig, $updatedConfig);
-      $container = new Container($container);
-      if($container->state == "RUNNING") {
-        $container->restartContainer();
-      }
-      break;
-    case 'fromSnapshot':
-      createFromSnapshot($_POST['name'], $_POST['description'], $_POST['container'], $_POST['snapshot'], $_POST['autostart'], $_POST['mac']);
-      break;
-    case 'fromBackup':
-      createFromBackup($_POST['name'], $_POST['description'], $_POST['container'], $_POST['backup'], $_POST['autostart'], $_POST['mac']);
-      break;
-    case 'setDescription':
-      $container = new Container($_POST['container']);
-      $container->setDescription($_POST['description']);
-      break;
-    case 'delDescription':
-      $container = new Container($_POST['container']);
-      $container->delDescription();
-      break;
-    case 'setWebUIURL':
-      $container = new Container($_POST['container']);
-      $container->setWebuiurl($_POST['webuiurl']);
-      break;
-    case 'delWebUIURL':
-      $container = new Container($_POST['container']);
-      $container->delWebuiurl();
-      break;
-    case 'createTEMPLATE':
-      createfromTemplate($_POST['name'], $_POST['description'], $_POST['repository'], $_POST['webui'], $_POST['icon'], $_POST['startcont'], $_POST['autostart'], $_POST['convertbdev'], $_POST['mac'], $_POST['supportlink'], $_POST['donatelink']);
-      break;
-    default:
-      break;
-  }
+require_once __DIR__ . '/functions.php';
+require_once __DIR__ . '/Settings.php';
+require_once __DIR__ . '/Paths.php';
+require_once __DIR__ . '/ContainerConfig.php';
+require_once __DIR__ . '/Network.php';
+require_once __DIR__ . '/Devices.php';
+require_once __DIR__ . '/Resources.php';
+require_once __DIR__ . '/Ssh.php';
+
+header('Content-Type: application/json; charset=UTF-8');
+
+/**
+ * @return never
+ */
+function lxcJson(bool $ok, string $message, array $extra = [])
+{
+    echo json_encode(array_merge(['ok' => $ok, 'message' => $message], $extra));
+    exit;
 }
 
-require_once 'Container.php';
-if (isset($_POST['action']) && $_POST['action'] == 'updateValues') {
+/**
+ * Reject anything that is not a real container name.
+ */
+function requireContainer(): string
+{
+    $name = (string) ($_POST['container'] ?? '');
+    if (!LxcPaths::isValidContainerName($name) || !LxcPaths::containerExists($name)) {
+        lxcJson(false, 'Unknown or invalid container.');
+    }
+
+    return $name;
+}
+
+if (isset($_POST['lxc'])) {
+    $settings = new Settings();
+
+    switch ($_POST['action']) {
+        // ---------------------------------------------------- lifecycle actions
+        case 'startCONT':
+            $name = requireContainer();
+            $container = new Container($name);
+            $container->startContainer();
+            lxcJson(true, 'Container started.');
+
+        case 'stopCONT':
+            $name = requireContainer();
+            $container = new Container($name);
+            $container->stopContainer();
+            lxcJson(true, 'Container stopped.');
+
+        case 'startALLCONT':
+            foreach (getAllContainers() as $cont) {
+                if ($cont->state === 'STOPPED' || $cont->state === 'FROZEN') {
+                    (new Container($cont->name))->startContainer();
+                }
+            }
+            lxcJson(true, 'All containers started.');
+
+        case 'stopALLCONT':
+            foreach (getAllContainers() as $cont) {
+                if ($cont->state === 'RUNNING' || $cont->state === 'FROZEN') {
+                    (new Container($cont->name))->stopContainer();
+                }
+            }
+            lxcJson(true, 'All containers stopped.');
+
+        case 'restartCONT':
+            $name = requireContainer();
+            (new Container($name))->restartContainer();
+            lxcJson(true, 'Container restarted.');
+
+        case 'freezeCONT':
+            $name = requireContainer();
+            (new Container($name))->freezeContainer();
+            lxcJson(true, 'Container frozen.');
+
+        case 'freezeALLCONT':
+            foreach (getAllContainers() as $cont) {
+                if ($cont->state === 'RUNNING') {
+                    (new Container($cont->name))->freezeContainer();
+                }
+            }
+            lxcJson(true, 'All containers frozen.');
+
+        case 'unfreezeCONT':
+            $name = requireContainer();
+            (new Container($name))->unfreezeContainer();
+            lxcJson(true, 'Container unfrozen.');
+
+        case 'unfreezeALLCONT':
+            foreach (getAllContainers() as $cont) {
+                if ($cont->state === 'FROZEN') {
+                    (new Container($cont->name))->unfreezeContainer();
+                }
+            }
+            lxcJson(true, 'All containers unfrozen.');
+
+        case 'killCONT':
+            $name = requireContainer();
+            (new Container($name))->killContainer();
+            lxcJson(true, 'Container killed.');
+
+        case 'autostart':
+            $name = requireContainer();
+            (new Container($name))->setAutostart(($_POST['autostart'] ?? '') === 'true' ? 1 : 0);
+            lxcJson(true, 'Autostart updated.');
+
+        case 'destroyCONT':
+            $name = requireContainer();
+            ob_start();
+            (new Container($name))->destroyContainer();
+            $output = ob_get_clean();
+            lxcJson(strpos((string) $output, 'ERROR') === false, trim((string) $output) ?: 'Container destroyed.');
+
+        case 'snapshotCONT':
+            $name = requireContainer();
+            ob_start();
+            (new Container($name))->createSnapshot();
+            $output = ob_get_clean();
+            lxcJson(strpos((string) $output, 'ERROR') === false, trim((string) $output) ?: 'Snapshot created.');
+
+        case 'deleteSNAP':
+            $name = requireContainer();
+            (new Container($name))->deleteSnapshot((string) ($_POST['snapshot'] ?? ''));
+            lxcJson(true, 'Snapshot deleted.');
+
+        case 'backupCONT':
+            $name = requireContainer();
+            ob_start();
+            (new Container($name))->createBackup();
+            $output = ob_get_clean();
+            lxcJson(strpos((string) $output, 'ERROR') === false, trim((string) $output) ?: 'Backup created.');
+
+        case 'deleteBACKUP':
+            $name = requireContainer();
+            (new Container($name))->deleteBackup((string) ($_POST['backup'] ?? ''));
+            lxcJson(true, 'Backup deleted.');
+
+        // ------------------------------------------------------- create / copy
+        case 'createCONT':
+            $name = (string) ($_POST['name'] ?? '');
+            if (!LxcPaths::isValidContainerName($name)) {
+                lxcJson(false, 'Invalid container name.');
+            }
+
+            $startAfterCreate = (string) ($_POST['startcont'] ?? '') === 'true';
+            $interfaces = null;
+            $networkRaw = (string) ($_POST['network'] ?? '');
+            if ($networkRaw !== '') {
+                $payload = json_decode($networkRaw, true);
+                if (is_array($payload)) {
+                    try {
+                        $interfaces = [NetworkInterface::fromRequest($payload, 0)];
+                    } catch (InvalidArgumentException $e) {
+                        lxcJson(false, $e->getMessage());
+                    }
+                }
+            }
+
+            ob_start();
+            createContainer(
+                $name,
+                (string) ($_POST['description'] ?? ''),
+                (string) ($_POST['distribution'] ?? ''),
+                (string) ($_POST['release'] ?? ''),
+                $interfaces !== null ? 'false' : (string) ($_POST['startcont'] ?? ''),
+                (string) ($_POST['autostart'] ?? ''),
+                (string) ($_POST['mac'] ?? '')
+            );
+            $output = ob_get_clean();
+
+            // Apply the network before the first boot so the container never
+            // starts with the template default interface.
+            if ($interfaces !== null && LxcPaths::containerExists($name)) {
+                Network::write(new ContainerConfig($name), $interfaces);
+                if ($startAfterCreate) {
+                    (new Container($name))->startContainer();
+                }
+            }
+
+            lxcJson(strpos((string) $output, 'ERROR') === false, trim((string) $output) ?: 'Container created.');
+
+        case 'copyCONT':
+            $name = (string) ($_POST['name'] ?? '');
+            $source = (string) ($_POST['container'] ?? '');
+            if (!LxcPaths::isValidContainerName($name) || !LxcPaths::containerExists($source)) {
+                lxcJson(false, 'Invalid container name.');
+            }
+            ob_start();
+            copyContainer($name, (string) ($_POST['description'] ?? ''), $source, (string) ($_POST['autostart'] ?? ''), (string) ($_POST['mac'] ?? ''));
+            $output = ob_get_clean();
+            lxcJson(true, trim((string) $output) ?: 'Container copied.');
+
+        case 'fromSnapshot':
+            $name = (string) ($_POST['name'] ?? '');
+            if (!LxcPaths::isValidContainerName($name)) {
+                lxcJson(false, 'Invalid container name.');
+            }
+            ob_start();
+            createFromSnapshot($name, (string) ($_POST['description'] ?? ''), (string) ($_POST['container'] ?? ''), (string) ($_POST['snapshot'] ?? ''), (string) ($_POST['autostart'] ?? ''), (string) ($_POST['mac'] ?? ''));
+            lxcJson(true, trim((string) ob_get_clean()) ?: 'Container restored.');
+
+        case 'fromBackup':
+            $name = (string) ($_POST['name'] ?? '');
+            if (!LxcPaths::isValidContainerName($name)) {
+                lxcJson(false, 'Invalid container name.');
+            }
+            ob_start();
+            createFromBackup($name, (string) ($_POST['description'] ?? ''), (string) ($_POST['container'] ?? ''), (string) ($_POST['backup'] ?? ''), (string) ($_POST['autostart'] ?? ''), (string) ($_POST['mac'] ?? ''));
+            lxcJson(true, trim((string) ob_get_clean()) ?: 'Container restored.');
+
+        case 'createTEMPLATE':
+            $name = (string) ($_POST['name'] ?? '');
+            if (!LxcPaths::isValidContainerName($name)) {
+                lxcJson(false, 'Invalid container name.');
+            }
+            ob_start();
+            createfromTemplate(
+                $name,
+                (string) ($_POST['description'] ?? ''),
+                (string) ($_POST['repository'] ?? ''),
+                (string) ($_POST['webui'] ?? ''),
+                (string) ($_POST['icon'] ?? ''),
+                (string) ($_POST['startcont'] ?? ''),
+                (string) ($_POST['autostart'] ?? ''),
+                (string) ($_POST['convertbdev'] ?? ''),
+                (string) ($_POST['mac'] ?? ''),
+                (string) ($_POST['supportlink'] ?? ''),
+                (string) ($_POST['donatelink'] ?? '')
+            );
+            $output = ob_get_clean();
+            lxcJson(strpos((string) $output, 'ERROR') === false, trim((string) $output) ?: 'Container created.');
+
+        // ----------------------------------------------------- metadata actions
+        case 'setDescription':
+            $name = requireContainer();
+            (new Container($name))->setDescription((string) ($_POST['description'] ?? ''));
+            lxcJson(true, 'Description saved.');
+
+        case 'delDescription':
+            $name = requireContainer();
+            (new Container($name))->delDescription();
+            lxcJson(true, 'Description removed.');
+
+        case 'setWebUIURL':
+            $name = requireContainer();
+            (new Container($name))->setWebuiurl((string) ($_POST['webuiurl'] ?? ''));
+            lxcJson(true, 'WebUI URL saved.');
+
+        case 'delWebUIURL':
+            $name = requireContainer();
+            (new Container($name))->delWebuiurl();
+            lxcJson(true, 'WebUI URL removed.');
+
+        // ------------------------------------------------------------ raw config
+        case 'showConfig':
+            $name = requireContainer();
+            header('Content-Type: text/plain; charset=UTF-8');
+            echo (new ContainerConfig($name))->read();
+            exit;
+
+        case 'saveConfig':
+            $name = requireContainer();
+            $updated = (string) ($_POST['updatedConfig'] ?? '');
+            $path = LxcPaths::containerConfig($name);
+            if (is_file($path)) {
+                @copy($path, $path . '.bak');
+            }
+            file_put_contents($path, $updated);
+            $container = new Container($name);
+            if ($container->state === 'RUNNING') {
+                $container->restartContainer();
+            }
+            lxcJson(true, 'Configuration saved.');
+
+        // ------------------------------------------------------ LXC v2 additions
+        case 'saveGeneral':
+            $name = requireContainer();
+            $config = new ContainerConfig($name);
+            $config->set('#container_description', trim((string) ($_POST['description'] ?? '')) ?: null);
+            $config->set('#container_webui', trim((string) ($_POST['webui'] ?? '')) ?: null);
+            $config->set('#container_supportlink', trim((string) ($_POST['supportlink'] ?? '')) ?: null);
+            $config->set('#container_donatelink', trim((string) ($_POST['donatelink'] ?? '')) ?: null);
+
+            $order = trim((string) ($_POST['order'] ?? ''));
+            $config->set('#container_order', ($order !== '' && ctype_digit($order)) ? $order : null);
+            $config->set('lxc.start.auto', ($_POST['autostart'] ?? '0') === '1' ? '1' : '0');
+            $config->save();
+
+            try {
+                Resources::write(new ContainerConfig($name), [
+                    'memoryMiB' => (string) ($_POST['memoryMiB'] ?? ''),
+                    'swapMiB' => (string) ($_POST['swapMiB'] ?? ''),
+                    'cpuset' => (string) ($_POST['cpuset'] ?? ''),
+                    'cpuWeight' => (string) ($_POST['cpuWeight'] ?? ''),
+                ]);
+            } catch (InvalidArgumentException $e) {
+                lxcJson(false, $e->getMessage());
+            }
+
+            lxcJson(true, 'General settings saved.');
+
+        case 'saveNetwork':
+            $name = requireContainer();
+            $payload = json_decode((string) ($_POST['nics'] ?? '[]'), true);
+            if (!is_array($payload) || $payload === []) {
+                lxcJson(false, 'No interface provided.');
+            }
+
+            try {
+                $interfaces = [];
+                foreach (array_values($payload) as $index => $nicData) {
+                    if (!is_array($nicData)) {
+                        continue;
+                    }
+                    $interfaces[] = NetworkInterface::fromRequest($nicData, $index);
+                }
+            } catch (InvalidArgumentException $e) {
+                lxcJson(false, $e->getMessage());
+            }
+
+            if ($interfaces === []) {
+                lxcJson(false, 'No valid interface provided.');
+            }
+
+            $config = new ContainerConfig($name);
+            Network::write($config, $interfaces);
+
+            $running = trim((string) LxcPaths::capture(['lxc-info', '-n', $name, '-sH'])) === 'RUNNING';
+            lxcJson(true, $running ? 'Network saved. Restart the container to apply it.' : 'Network saved.');
+
+        case 'saveDevices':
+            $name = requireContainer();
+            $gpus = json_decode((string) ($_POST['gpus'] ?? '[]'), true);
+            $usb = json_decode((string) ($_POST['usb'] ?? '[]'), true);
+            $misc = json_decode((string) ($_POST['misc'] ?? '[]'), true);
+
+            $config = new ContainerConfig($name);
+            Devices::write($config, [
+                'gpus' => is_array($gpus) ? $gpus : [],
+                'usb' => is_array($usb) ? $usb : [],
+                'misc' => is_array($misc) ? $misc : [],
+            ]);
+            Devices::writeUdevRules();
+
+            $running = trim((string) LxcPaths::capture(['lxc-info', '-n', $name, '-sH'])) === 'RUNNING';
+            lxcJson(true, $running ? 'Devices saved. Restart the container to apply them.' : 'Devices saved.');
+
+        case 'saveSsh':
+            $name = requireContainer();
+            $result = Ssh::apply($name, [
+                'rootPassword' => (string) ($_POST['rootPassword'] ?? ''),
+                'permitRootLogin' => (string) ($_POST['permitRootLogin'] ?? 'prohibit-password'),
+                'passwordAuthentication' => ($_POST['passwordAuthentication'] ?? '0') === '1',
+                'user' => (string) ($_POST['user'] ?? ''),
+                'userPassword' => (string) ($_POST['userPassword'] ?? ''),
+                'userSudo' => ($_POST['userSudo'] ?? '0') === '1',
+                'installOpenssh' => ($_POST['installOpenssh'] ?? '0') === '1',
+            ]);
+            lxcJson($result['ok'], implode(' ', $result['messages']), ['messages' => $result['messages']]);
+
+        case 'saveRawConfig':
+            $name = requireContainer();
+            $raw = (string) ($_POST['rawConfig'] ?? '');
+            if (trim($raw) === '') {
+                lxcJson(false, 'Refusing to write an empty configuration.');
+            }
+            $path = LxcPaths::containerConfig($name);
+            if (is_file($path)) {
+                @copy($path, $path . '.bak');
+            }
+            if (file_put_contents($path, $raw) === false) {
+                lxcJson(false, 'Could not write the configuration file.');
+            }
+            $state = trim((string) LxcPaths::capture(['lxc-info', '-n', $name, '-sH']));
+            if ($state === 'RUNNING') {
+                (new Container($name))->restartContainer();
+            }
+            lxcJson(true, 'Configuration saved.');
+
+        case 'getDevices':
+            lxcJson(true, 'ok', [
+                'gpus' => Devices::listGpus(),
+                'usb' => Devices::listUsb(),
+                'misc' => Devices::listMisc(),
+            ]);
+
+        default:
+            lxcJson(false, 'Unknown action.');
+    }
+}
+
+// ---------------------------------------------------------------- stats polling
+if (isset($_POST['action']) && $_POST['action'] === 'updateValues') {
     file_put_contents('/tmp/lxc/containers/active', time());
-    $containerNames = json_decode($_POST['containerNames']);
+    $containerNames = json_decode((string) ($_POST['containerNames'] ?? '[]'), true);
     $data = [];
-    foreach ($containerNames as $name) {
-        $container = new Container($name);
-        $cpu_usage = $container->cpu_usage;
-        $memoryUse = $container->memoryUse;
-        $ips = $container->ips;
-        $totalBytes = $container->totalBytes;
-        $data[] = ['name' => $name, 'cpu_usage' => $cpu_usage, 'memoryUse' => $memoryUse, 'ips' => $ips, 'totalBytes' => $totalBytes];
+    foreach (is_array($containerNames) ? $containerNames : [] as $name) {
+        if (!LxcPaths::isValidContainerName((string) $name) || !LxcPaths::containerExists((string) $name)) {
+            continue;
+        }
+        $container = new Container((string) $name);
+        $data[] = [
+            'name' => (string) $name,
+            'cpu_usage' => $container->cpu_usage,
+            'memoryUse' => $container->memoryUse,
+            'ips' => $container->ips,
+            'totalBytes' => $container->totalBytes,
+        ];
     }
     echo json_encode($data);
+    exit;
 }
+
+lxcJson(false, 'Nothing to do.');

@@ -1,0 +1,330 @@
+Title="Edit LXC v2 Container"
+Markdown="false"
+---
+<?php
+require_once '/usr/local/emhttp/plugins/lxc/include/Paths.php';
+require_once '/usr/local/emhttp/plugins/lxc/include/ContainerConfig.php';
+require_once '/usr/local/emhttp/plugins/lxc/include/Network.php';
+require_once '/usr/local/emhttp/plugins/lxc/include/Devices.php';
+require_once '/usr/local/emhttp/plugins/lxc/include/Resources.php';
+require_once '/usr/local/emhttp/plugins/lxc/include/Ssh.php';
+
+$name = (string) ($_GET['name'] ?? '');
+
+if (!LxcPaths::isValidContainerName($name) || !LxcPaths::containerExists($name)) {
+    echo '<div class="lxcv2-error">Invalid container: ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '</div>';
+    echo '<a href="/LXC" class="button">Back to containers</a>';
+    return;
+}
+
+$config = new ContainerConfig($name);
+$nics = Network::read($config);
+$resources = Resources::read($config);
+$devices = Devices::read($config);
+$sshState = Ssh::read($config);
+
+$gpus = Devices::listGpus();
+$usbDevices = Devices::listUsb();
+$miscDevices = Devices::listMisc();
+$hostLinks = Network::availableLinks();
+$hostCpus = Resources::hostCpus();
+$hostMemory = Resources::hostMemoryMiB();
+
+$description = (string) ($config->get('#container_description') ?? '');
+$webui = (string) ($config->get('#container_webui') ?? '');
+$supportlink = (string) ($config->get('#container_supportlink') ?? '');
+$donatelink = (string) ($config->get('#container_donatelink') ?? '');
+$autostart = (string) ($config->get('lxc.start.auto') ?? '0') === '1';
+$order = (string) ($config->get('#container_order') ?? '');
+$state = trim((string) LxcPaths::capture(['lxc-info', '-n', $name, '-sH']));
+
+$distribution = '';
+if (preg_match('/--dist\s+([A-Za-z0-9._-]+)/', $config->read(), $m) === 1) {
+    $distribution = strtolower($m[1]);
+}
+$iconPath = '/plugins/lxc/images/distributions/' . ($distribution !== '' ? $distribution : 'question') . '.png';
+if (!is_file('/usr/local/emhttp' . $iconPath)) {
+    $iconPath = '/plugins/lxc/images/distributions/question.png';
+}
+if (is_file(LxcPaths::dataPath() . '/custom-icons/' . $name . '.png')) {
+    $iconPath = LxcPaths::dataPath() . '/custom-icons/' . $name . '.png';
+}
+
+$nicsJson = json_encode(array_map(static function (NetworkInterface $nic): array {
+    return [
+        'type' => $nic->type,
+        'link' => $nic->link,
+        'name' => $nic->name,
+        'hwaddr' => $nic->hwaddr,
+        'macvlanMode' => $nic->macvlanMode,
+        'vethMode' => $nic->vethMode,
+        'vlanId' => $nic->vlanId,
+        'ipv4Mode' => $nic->ipv4Mode,
+        'ipv4Address' => $nic->ipv4Address,
+        'ipv4Gateway' => $nic->ipv4Gateway,
+        'ipv6Mode' => $nic->ipv6Mode,
+        'ipv6Address' => $nic->ipv6Address,
+        'ipv6Gateway' => $nic->ipv6Gateway,
+    ];
+}, $nics), JSON_UNESCAPED_SLASHES) ?: '[]';
+
+$linksJson = json_encode($hostLinks, JSON_UNESCAPED_SLASHES) ?: '[]';
+?>
+<link rel="stylesheet" href="<?autov('/plugins/lxc/css/lxc.css')?>">
+<script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
+<script src="<?autov('/plugins/lxc/js/lxc-edit.js')?>"></script>
+
+<script>
+  window.LXCV2_EDIT = {
+    name: <?= json_encode($name) ?>,
+    state: <?= json_encode($state) ?>,
+    nics: <?= $nicsJson ?>,
+    links: <?= $linksJson ?>,
+    hostMemory: <?= (int) $hostMemory ?>
+  };
+</script>
+
+<div class="lxcv2-page">
+  <div class="lxcv2-header">
+    <img src="<?= htmlspecialchars($iconPath, ENT_QUOTES, 'UTF-8') ?>" width="42" height="42" alt="">
+    <div>
+      <div class="lxcv2-title"><?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?></div>
+      <div class="lxcv2-subtitle">
+        <span class="lxcv2-state lxcv2-state-<?= strtolower($state !== '' ? $state : 'stopped') ?>">
+          <?= htmlspecialchars($state !== '' ? strtolower($state) : 'stopped', ENT_QUOTES, 'UTF-8') ?>
+        </span>
+        <?php if ($description !== '') { ?>
+          <span class="lxcv2-muted">&middot; <?= htmlspecialchars($description, ENT_QUOTES, 'UTF-8') ?></span>
+        <?php } ?>
+      </div>
+    </div>
+    <div class="lxcv2-header-actions">
+      <?php if ($state === 'RUNNING') { ?>
+        <button type="button" class="lxcv2-icon-btn" title="Terminal" onclick="startConsole('<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>')"><i class="fa fa-terminal"></i></button>
+        <button type="button" class="lxcv2-icon-btn" title="Restart" onclick="lxcQuickAction('restartCONT','<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>')"><i class="fa fa-refresh"></i></button>
+        <button type="button" class="lxcv2-icon-btn danger" title="Stop" onclick="lxcQuickAction('stopCONT','<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>')"><i class="fa fa-stop"></i></button>
+      <?php } elseif ($state === 'FROZEN') { ?>
+        <button type="button" class="lxcv2-icon-btn" title="Unfreeze" onclick="lxcQuickAction('unfreezeCONT','<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>')"><i class="fa fa-snowflake-o"></i></button>
+      <?php } else { ?>
+        <button type="button" class="lxcv2-icon-btn ok" title="Start" onclick="lxcQuickAction('startCONT','<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>')"><i class="fa fa-play"></i></button>
+      <?php } ?>
+      <a class="lxcv2-icon-btn" title="Back" href="/LXC"><i class="fa fa-arrow-left"></i></a>
+    </div>
+  </div>
+
+  <div class="lxcv2-tabs">
+    <button type="button" class="lxcv2-tab active" data-tab="general"><i class="fa fa-cog"></i> General</button>
+    <button type="button" class="lxcv2-tab" data-tab="network"><i class="fa fa-network-wired"></i> Network</button>
+    <button type="button" class="lxcv2-tab" data-tab="devices"><i class="fa fa-microchip"></i> Devices</button>
+    <button type="button" class="lxcv2-tab" data-tab="ssh"><i class="fa fa-key"></i> SSH</button>
+    <button type="button" class="lxcv2-tab" data-tab="advanced"><i class="fa fa-file-code-o"></i> Advanced</button>
+  </div>
+
+  <!-- General -->
+  <div class="lxcv2-panel active" id="tab-general">
+    <form id="form-general" autocomplete="off">
+      <dl>
+        <dt>Description</dt>
+        <dd><input type="text" name="description" maxlength="50" value="<?= htmlspecialchars($description, ENT_QUOTES, 'UTF-8') ?>" placeholder="Optional description"></dd>
+      </dl>
+      <dl>
+        <dt>WebUI URL</dt>
+        <dd><input type="text" name="webui" value="<?= htmlspecialchars($webui, ENT_QUOTES, 'UTF-8') ?>" placeholder="http://[IP]:8080"></dd>
+      </dl>
+      <dl>
+        <dt>Autostart</dt>
+        <dd><input type="checkbox" name="autostart" <?= $autostart ? 'checked' : '' ?>> <span class="lxcv2-muted">Start when the array starts</span></dd>
+      </dl>
+      <dl>
+        <dt>Start order</dt>
+        <dd><input type="number" name="order" min="0" max="999" value="<?= htmlspecialchars($order, ENT_QUOTES, 'UTF-8') ?>" placeholder="0"></dd>
+      </dl>
+      <dl>
+        <dt>Support link</dt>
+        <dd><input type="text" name="supportlink" value="<?= htmlspecialchars($supportlink, ENT_QUOTES, 'UTF-8') ?>" placeholder="https://..."></dd>
+      </dl>
+      <dl>
+        <dt>Donate link</dt>
+        <dd><input type="text" name="donatelink" value="<?= htmlspecialchars($donatelink, ENT_QUOTES, 'UTF-8') ?>" placeholder="https://..."></dd>
+      </dl>
+
+      <h3 class="lxcv2-section"><i class="fa fa-tachometer"></i> Resources</h3>
+      <dl>
+        <dt>Memory limit (MiB)</dt>
+        <dd>
+          <input type="number" name="memoryMiB" min="16" value="<?= htmlspecialchars($resources['memoryMiB'], ENT_QUOTES, 'UTF-8') ?>" placeholder="Unlimited">
+          <span class="lxcv2-muted">Host total: <?= (int) $hostMemory ?> MiB</span>
+        </dd>
+      </dl>
+      <dl>
+        <dt>Swap limit (MiB)</dt>
+        <dd><input type="number" name="swapMiB" min="0" value="<?= htmlspecialchars($resources['swapMiB'], ENT_QUOTES, 'UTF-8') ?>" placeholder="Unlimited"></dd>
+      </dl>
+      <dl>
+        <dt>CPU pinning</dt>
+        <dd>
+          <input type="text" name="cpuset" value="<?= htmlspecialchars($resources['cpuset'], ENT_QUOTES, 'UTF-8') ?>" placeholder="e.g. 0-3 or 0,2,4">
+          <span class="lxcv2-muted">Online CPUs: <?= htmlspecialchars($hostCpus['online'], ENT_QUOTES, 'UTF-8') ?></span>
+        </dd>
+      </dl>
+      <dl>
+        <dt>CPU weight</dt>
+        <dd><input type="number" name="cpuWeight" min="1" max="10000" value="<?= htmlspecialchars($resources['cpuWeight'], ENT_QUOTES, 'UTF-8') ?>" placeholder="100 (default)"></dd>
+      </dl>
+
+      <div class="lxcv2-actions">
+        <button type="submit" class="lxcv2-btn primary"><i class="fa fa-save"></i> Save general</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Network -->
+  <div class="lxcv2-panel" id="tab-network">
+    <div class="lxcv2-hint">
+      <i class="fa fa-info-circle"></i>
+      <span><b>DHCP</b> leaves the address empty and lets the container fetch a lease.
+      <b>Static</b> pins the address. VLAN tagging uses <code>lxc.net.N.veth.vlan.id</code> on veth interfaces;
+      for macvlan the tag is applied by attaching to <code>&lt;link&gt;.&lt;vlan&gt;</code>.</span>
+    </div>
+    <div id="nic-list"></div>
+    <button type="button" class="lxcv2-btn" onclick="addNic()"><i class="fa fa-plus"></i> Add interface</button>
+    <div class="lxcv2-actions">
+      <button type="button" class="lxcv2-btn primary" onclick="saveNetwork()"><i class="fa fa-save"></i> Save network</button>
+    </div>
+  </div>
+
+  <!-- Devices -->
+  <div class="lxcv2-panel" id="tab-devices">
+    <form id="form-devices">
+      <h3 class="lxcv2-section"><i class="fa fa-display"></i> GPU passthrough</h3>
+      <?php if ($gpus === []) { ?>
+        <p class="lxcv2-muted">No GPU detected on the host.</p>
+      <?php } else { ?>
+        <table class="lxcv2-table">
+          <thead><tr><th></th><th>Device</th><th>Driver</th><th>Nodes</th></tr></thead>
+          <tbody>
+          <?php foreach ($gpus as $gpu) { ?>
+            <tr>
+              <td><input type="checkbox" name="gpu[]" value="<?= htmlspecialchars($gpu['id'], ENT_QUOTES, 'UTF-8') ?>" <?= in_array($gpu['id'], $devices['gpus'], true) ? 'checked' : '' ?>></td>
+              <td><b><?= htmlspecialchars($gpu['name'], ENT_QUOTES, 'UTF-8') ?></b><br><span class="lxcv2-muted"><?= htmlspecialchars($gpu['pci'], ENT_QUOTES, 'UTF-8') ?></span></td>
+              <td><?= htmlspecialchars($gpu['driver'] !== '' ? $gpu['driver'] : 'unknown', ENT_QUOTES, 'UTF-8') ?></td>
+              <td class="lxcv2-mono"><?= htmlspecialchars(implode(', ', $gpu['devices']), ENT_QUOTES, 'UTF-8') ?></td>
+            </tr>
+          <?php } ?>
+          </tbody>
+        </table>
+      <?php } ?>
+
+      <h3 class="lxcv2-section"><i class="fa fa-usb"></i> USB passthrough</h3>
+      <?php if ($usbDevices === []) { ?>
+        <p class="lxcv2-muted">No USB device detected on the host.</p>
+      <?php } else { ?>
+        <table class="lxcv2-table">
+          <thead><tr><th></th><th>Device</th><th>IDs</th><th>Bus/Port</th></tr></thead>
+          <tbody>
+          <?php foreach ($usbDevices as $device) { ?>
+            <tr>
+              <td><input type="checkbox" name="usb[]" value="<?= htmlspecialchars($device['id'], ENT_QUOTES, 'UTF-8') ?>" <?= in_array($device['id'], $devices['usb'], true) ? 'checked' : '' ?>></td>
+              <td><?= htmlspecialchars($device['name'], ENT_QUOTES, 'UTF-8') ?><?= $device['serial'] !== '' ? ' <span class="lxcv2-muted">#' . htmlspecialchars($device['serial'], ENT_QUOTES, 'UTF-8') . '</span>' : '' ?></td>
+              <td class="lxcv2-mono"><?= htmlspecialchars($device['vendor'] . ':' . $device['product'], ENT_QUOTES, 'UTF-8') ?></td>
+              <td class="lxcv2-mono"><?= htmlspecialchars($device['bus'] . '/' . $device['dev'], ENT_QUOTES, 'UTF-8') ?></td>
+            </tr>
+          <?php } ?>
+          </tbody>
+        </table>
+      <?php } ?>
+
+      <h3 class="lxcv2-section"><i class="fa fa-plug"></i> Other devices</h3>
+      <div class="lxcv2-grid">
+        <?php foreach ($miscDevices as $device) { ?>
+          <label class="lxcv2-check <?= $device['present'] ? '' : 'disabled' ?>">
+            <input type="checkbox" name="misc[]" value="<?= htmlspecialchars($device['path'], ENT_QUOTES, 'UTF-8') ?>"
+              <?= in_array($device['path'], $devices['misc'], true) ? 'checked' : '' ?>
+              <?= $device['present'] ? '' : 'disabled' ?>>
+            <span><?= htmlspecialchars($device['label'], ENT_QUOTES, 'UTF-8') ?><br><span class="lxcv2-mono"><?= htmlspecialchars($device['path'], ENT_QUOTES, 'UTF-8') ?></span></span>
+          </label>
+        <?php } ?>
+      </div>
+
+      <div class="lxcv2-actions">
+        <button type="submit" class="lxcv2-btn primary"><i class="fa fa-save"></i> Save devices</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- SSH -->
+  <div class="lxcv2-panel" id="tab-ssh">
+    <form id="form-ssh" autocomplete="off">
+      <div class="lxcv2-hint">
+        <i class="fa fa-shield"></i>
+        <span>Passwords are sent to <code>chpasswd</code> over stdin and are never written to the configuration file or the syslog.
+        Changes are applied immediately when the container is running, otherwise they are staged for the next start.</span>
+      </div>
+
+      <h3 class="lxcv2-section"><i class="fa fa-user-secret"></i> Root access</h3>
+      <dl>
+        <dt>Root password</dt>
+        <dd>
+          <input type="password" name="rootPassword" autocomplete="new-password" placeholder="<?= $sshState['rootPasswordSet'] ? '•••••••• (already set)' : 'Not set' ?>">
+          <span class="lxcv2-muted">Leave empty to keep the current password.</span>
+        </dd>
+      </dl>
+      <dl>
+        <dt>Permit root login</dt>
+        <dd>
+          <select name="permitRootLogin">
+            <?php foreach (['prohibit-password' => 'prohibit-password (keys only)', 'yes' => 'yes (password allowed)', 'no' => 'no', 'forced-commands-only' => 'forced-commands-only'] as $value => $label) { ?>
+              <option value="<?= $value ?>" <?= $sshState['permitRootLogin'] === $value ? 'selected' : '' ?>><?= $label ?></option>
+            <?php } ?>
+          </select>
+        </dd>
+      </dl>
+      <dl>
+        <dt>Password authentication</dt>
+        <dd><input type="checkbox" name="passwordAuthentication" <?= $sshState['passwordAuthentication'] ? 'checked' : '' ?>> <span class="lxcv2-muted">Allow SSH logins with a password</span></dd>
+      </dl>
+
+      <h3 class="lxcv2-section"><i class="fa fa-user-plus"></i> Additional user</h3>
+      <dl>
+        <dt>User name</dt>
+        <dd><input type="text" name="user" value="<?= htmlspecialchars($sshState['user'], ENT_QUOTES, 'UTF-8') ?>" placeholder="e.g. admin"></dd>
+      </dl>
+      <dl>
+        <dt>User password</dt>
+        <dd><input type="password" name="userPassword" autocomplete="new-password" placeholder="Leave empty to keep the current password"></dd>
+      </dl>
+      <dl>
+        <dt>Sudo</dt>
+        <dd><input type="checkbox" name="userSudo" checked> <span class="lxcv2-muted">Add the user to sudo/wheel</span></dd>
+      </dl>
+
+      <h3 class="lxcv2-section"><i class="fa fa-download"></i> OpenSSH server</h3>
+      <dl>
+        <dt>Install if missing</dt>
+        <dd><input type="checkbox" name="installOpenssh"> <span class="lxcv2-muted">Uses the container package manager (apt, dnf, pacman, apk, zypper)</span></dd>
+      </dl>
+
+      <div class="lxcv2-actions">
+        <button type="submit" class="lxcv2-btn primary"><i class="fa fa-save"></i> Apply SSH settings</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Advanced -->
+  <div class="lxcv2-panel" id="tab-advanced">
+    <div class="lxcv2-hint warning">
+      <i class="fa fa-exclamation-triangle"></i>
+      <span>Editing the raw configuration bypasses every validation. Saving restarts a running container.
+      A <code>config.bak</code> copy of the previous version is kept next to the file.</span>
+    </div>
+    <form id="form-advanced">
+      <textarea id="rawConfig" name="rawConfig" spellcheck="false"><?= htmlspecialchars($config->read(), ENT_QUOTES, 'UTF-8') ?></textarea>
+      <div class="lxcv2-actions">
+        <button type="submit" class="lxcv2-btn primary"><i class="fa fa-save"></i> Save raw configuration</button>
+        <a class="lxcv2-btn" href="/LXC"><i class="fa fa-times"></i> Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="lxcv2-toast" class="lxcv2-toast"></div>

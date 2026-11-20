@@ -83,23 +83,25 @@ function setVariable($file, $variable, $value) {
     return;
   }
 
+  // A config entry is a single line: never allow CR/LF to inject new directives.
+  $value = str_replace(array("\r", "\n"), ' ', (string) $value);
+
   $newFile = [];
   $lines = explode("\n", $contents);
   $found = false;
-
-  if(count($lines) <= 1) {
-    return;
-  }
+  $pattern = '/^\s*' . preg_quote($variable, '/') . '\s*=/';
 
   foreach($lines as $line) {
-    if (strpos($line, $variable) === 0) {
-      $newFile[] = $variable . "=" . $value;
-      $found = true;
-    } else {
-      $newFile[] = $line;
+    if (preg_match($pattern, $line) === 1) {
+      if (!$found) {
+        $newFile[] = $variable . "=" . $value;
+        $found = true;
+      }
+      continue;
     }
+    $newFile[] = $line;
   }
-  if (!$found && count($newFile) >= 1 ) {
+  if (!$found) {
     $newFile[] = $variable . "=" . $value;
   }
 

@@ -1,6 +1,6 @@
 Menu="Tasks:65"
 Type="xmenu"
-Title="LXC Containers"
+Title="LXC v2"
 Tabs="true"
 Tag="lxc_bw.png"
 Code="f1b2"
@@ -126,6 +126,9 @@ label+.content {
   </th>
   <th style='width: 100px;'>
     Uptime
+  </th>
+  <th style='width: 150px; min-width: 150px;'>
+    Actions
   </th>
 </tr>
 </thead>
@@ -300,6 +303,21 @@ foreach ($allContainers as $container) {
     </td>
     <td>
       <?= $container->uptime;?>
+    </td>
+    <td class="lxcv2-row-actions">
+      <?php $safeName = htmlspecialchars($container->name, ENT_QUOTES, 'UTF-8'); ?>
+      <?php if ($container->state == "RUNNING") { ?>
+        <button type="button" class="lxcv2-icon-btn" title="Terminal" onclick="startConsole('<?= $safeName ?>')"><i class="fa fa-terminal"></i></button>
+        <button type="button" class="lxcv2-icon-btn" title="Restart" onclick="lxcRowAction('restartCONT','<?= $safeName ?>')"><i class="fa fa-refresh"></i></button>
+        <button type="button" class="lxcv2-icon-btn danger" title="Stop" onclick="lxcRowAction('stopCONT','<?= $safeName ?>')"><i class="fa fa-stop"></i></button>
+      <?php } elseif ($container->state == "FROZEN") { ?>
+        <button type="button" class="lxcv2-icon-btn" title="Unfreeze" onclick="lxcRowAction('unfreezeCONT','<?= $safeName ?>')"><i class="fa fa-snowflake-o"></i></button>
+        <button type="button" class="lxcv2-icon-btn danger" title="Kill" onclick="lxcRowAction('killCONT','<?= $safeName ?>')"><i class="fa fa-times"></i></button>
+      <?php } else { ?>
+        <button type="button" class="lxcv2-icon-btn ok" title="Start" onclick="lxcRowAction('startCONT','<?= $safeName ?>')"><i class="fa fa-play"></i></button>
+      <?php } ?>
+      <a class="lxcv2-icon-btn" title="Edit container" href="/LXCEditContainer?name=<?= urlencode($container->name) ?>"><i class="fa fa-edit"></i></a>
+      <button type="button" class="lxcv2-icon-btn" title="More actions" onclick="showDropdown('<?= $safeName ?>')"><i class="fa fa-ellipsis-h"></i></button>
     </td>
   </tr>
   <? } ?>
