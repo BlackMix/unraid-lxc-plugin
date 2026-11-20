@@ -7,7 +7,7 @@
   <!ENTITY launch    "Settings/LXCSettings">
   <!ENTITY gitURL    "https://github.com/&author;/unraid-&name;-plugin/raw/master">
   <!ENTITY pluginURL "&gitURL;/&name;.plg">
-  <!ENTITY md5       "7eae65aab2ba13e46acdf4aa136f5e55">
+  <!ENTITY md5       "7fda4b5f4b9a68ec85d81c1ad2be7b5d">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
   <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 ]>
@@ -32,7 +32,11 @@
   with sudo, optional OpenSSH server installation
 - Resources: memory limit, swap limit, CPU pinning and CPU weight
 - Hardening: container name validation, argument-array shell calls, atomic
-  config writes with config.bak, no passwords written to disk or syslog
+  config writes with config.bak, no passwords written to disk or syslog, and
+  CSRF validation on every POST (with a fallback for older Unraid releases)
+- Fix: VLAN on macvlan now uses the link.vlan sub-interface and warns when
+  it does not exist on the host
+- Fix: destroy/snapshot/backup dialogs report errors from the JSON responses
 
 </CHANGES>
 

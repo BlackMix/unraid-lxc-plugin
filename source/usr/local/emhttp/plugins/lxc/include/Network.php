@@ -27,6 +27,18 @@ class NetworkInterface
 
     public bool $flagsUp = true;
 
+    public function effectiveLink(): string
+    {
+        if ($this->type === 'macvlan' && $this->vlanId !== null) {
+            $suffix = '.' . $this->vlanId;
+            if (substr($this->link, -strlen($suffix)) !== $suffix) {
+                return $this->link . $suffix;
+            }
+        }
+
+        return $this->link;
+    }
+
     /**
      * @return string[]
      */
@@ -34,9 +46,14 @@ class NetworkInterface
     {
         $i = $this->index;
         $lines = [];
+
+        // macvlan has no native vlan.id key: Unraid/ Linux need a VLAN
+        // sub-interface on the host (eth0.100, bond0.100, ...).
+        $link = $this->effectiveLink();
+
         $lines[] = 'lxc.net.' . $i . '.type = ' . $this->type;
         $lines[] = 'lxc.net.' . $i . '.flags = ' . ($this->flagsUp ? 'up' : 'down');
-        $lines[] = 'lxc.net.' . $i . '.link = ' . $this->link;
+        $lines[] = 'lxc.net.' . $i . '.link = ' . $link;
         $lines[] = 'lxc.net.' . $i . '.name = ' . $this->name;
 
         if ($this->hwaddr !== '') {
@@ -347,6 +364,15 @@ final class Network
     {
         $values = self::collectNetValues($config->lines());
 
+        // Remember macvlan VLAN tags: they are encoded in the link name and
+        // would otherwise be lost when the config is read back.
+        $macvlanVlans = [];
+        foreach ($config->lines() as $line) {
+            if (preg_match('/^#@macvlan_vlan\s+(\d+)\s+(\d{1,4})$/', trim($line), $m) === 1) {
+                $macvlanVlans[(int) $m[1]] = (int) $m[2];
+            }
+        }
+
         if ($values === []) {
             return [self::defaultInterface()];
         }
@@ -354,7 +380,15 @@ final class Network
         ksort($values);
         $interfaces = [];
         foreach ($values as $index => $entries) {
-            $interfaces[] = NetworkInterface::fromValues((int) $index, $entries);
+            $nic = NetworkInterface::fromValues((int) $index, $entries);
+            if (isset($macvlanVlans[(int) $index])) {
+                $nic->vlanId = $macvlanVlans[(int) $index];
+                $suffix = '.' . $nic->vlanId;
+                if (substr($nic->link, -strlen($suffix)) === $suffix) {
+                    $nic->link = substr($nic->link, 0, -strlen($suffix));
+                }
+            }
+            $interfaces[] = $nic;
         }
 
         return $interfaces;
@@ -408,6 +442,9 @@ final class Network
             $nic->index = $index;
             if ($index > 0) {
                 $body[] = '';
+            }
+            if ($nic->type === 'macvlan' && $nic->vlanId !== null) {
+                $body[] = '#@macvlan_vlan ' . $index . ' ' . $nic->vlanId;
             }
             foreach ($nic->toLines() as $line) {
                 $body[] = $line;

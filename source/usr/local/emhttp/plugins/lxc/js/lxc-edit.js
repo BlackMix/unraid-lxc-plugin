@@ -21,15 +21,18 @@
   }
 
   function post(action, data) {
-    return fetch(AJAX, {
+    var headers = EDIT.csrfToken ? { 'X-CSRF-Token': EDIT.csrfToken } : {};
+
+    return $.ajax({
+      url: AJAX,
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
-      body: new URLSearchParams(Object.assign({ lxc: '', action: action, container: EDIT.name }, data || {}))
-    }).then(function (response) {
-      return response.text().then(function (text) {
-        return { ok: response.ok, text: text };
-      });
-    });
+      dataType: 'text',
+      headers: headers,
+      data: Object.assign({ lxc: '', action: action, container: EDIT.name }, data || {})
+    }).then(
+      function (text) { return { ok: true, text: String(text) }; },
+      function (xhr) { return { ok: false, text: xhr.responseText || 'Request failed' }; }
+    );
   }
 
   function parseResult(result) {

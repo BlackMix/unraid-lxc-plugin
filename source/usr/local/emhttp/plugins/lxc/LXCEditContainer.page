@@ -69,6 +69,11 @@ $nicsJson = json_encode(array_map(static function (NetworkInterface $nic): array
 }, $nics), JSON_UNESCAPED_SLASHES) ?: '[]';
 
 $linksJson = json_encode($hostLinks, JSON_UNESCAPED_SLASHES) ?: '[]';
+$csrfToken = (string) ($var['csrf_token'] ?? '');
+if ($csrfToken === '') {
+    $varIni = @parse_ini_file('/var/local/emhttp/var.ini');
+    $csrfToken = is_array($varIni) ? (string) ($varIni['csrf_token'] ?? '') : '';
+}
 ?>
 <link rel="stylesheet" href="<?autov('/plugins/lxc/css/lxc.css')?>">
 <script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
@@ -80,7 +85,8 @@ $linksJson = json_encode($hostLinks, JSON_UNESCAPED_SLASHES) ?: '[]';
     state: <?= json_encode($state) ?>,
     nics: <?= $nicsJson ?>,
     links: <?= $linksJson ?>,
-    hostMemory: <?= (int) $hostMemory ?>
+    hostMemory: <?= (int) $hostMemory ?>,
+    csrfToken: <?= json_encode($csrfToken) ?>
   };
 </script>
 
@@ -184,7 +190,8 @@ $linksJson = json_encode($hostLinks, JSON_UNESCAPED_SLASHES) ?: '[]';
       <i class="fa fa-info-circle"></i>
       <span><b>DHCP</b> leaves the address empty and lets the container fetch a lease.
       <b>Static</b> pins the address. VLAN tagging uses <code>lxc.net.N.veth.vlan.id</code> on veth interfaces;
-      for macvlan the tag is applied by attaching to <code>&lt;link&gt;.&lt;vlan&gt;</code>.</span>
+      for macvlan the plugin attaches to <code>&lt;link&gt;.&lt;vlan&gt;</code> &mdash; the sub-interface
+      must exist on the host before the container starts.</span>
     </div>
     <div id="nic-list"></div>
     <button type="button" class="lxcv2-btn" onclick="addNic()"><i class="fa fa-plus"></i> Add interface</button>

@@ -27,8 +27,7 @@ file_put_contents('/tmp/lxc/containers/active', time());
   function closeShadowbox() {
     shadowbox.style.display = 'none';
   }
-
-
+  window.LXCV2_CSRF = <?= json_encode((string) ($var['csrf_token'] ?? '')) ?>;
 </script>
 <link rel="stylesheet" href="<?autov('/plugins/lxc/css/lxc.css')?>">
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
@@ -317,7 +316,7 @@ foreach ($allContainers as $container) {
         <button type="button" class="lxcv2-icon-btn ok" title="Start" onclick="lxcRowAction('startCONT','<?= $safeName ?>')"><i class="fa fa-play"></i></button>
       <?php } ?>
       <a class="lxcv2-icon-btn" title="Edit container" href="/LXCEditContainer?name=<?= urlencode($container->name) ?>"><i class="fa fa-edit"></i></a>
-      <button type="button" class="lxcv2-icon-btn" title="More actions" onclick="showDropdown('<?= $safeName ?>')"><i class="fa fa-ellipsis-h"></i></button>
+      <button type="button" class="lxcv2-icon-btn btn_dropdown" title="More actions" onclick="showDropdown('<?= $safeName ?>')"><i class="fa fa-ellipsis-h"></i></button>
     </td>
   </tr>
   <? } ?>

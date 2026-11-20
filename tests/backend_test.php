@@ -115,7 +115,14 @@ Network::write($config, [$nic]);
 $raw = file_get_contents($config->path());
 check('macvlan type', strpos($raw, 'lxc.net.0.type = macvlan') !== false);
 check('macvlan mode', strpos($raw, 'lxc.net.0.macvlan.mode = bridge') !== false);
+check('macvlan vlan sub-interface', strpos($raw, 'lxc.net.0.link = eth0.200') !== false);
+check('macvlan vlan metadata', strpos($raw, '#@macvlan_vlan 0 200') !== false);
 check('macvlan has no veth vlan', strpos($raw, 'veth.vlan.id') === false);
+
+$roundtrip = Network::read(new ContainerConfig('ct1'));
+check('macvlan vlan read back', $roundtrip[0]->vlanId === 200);
+check('macvlan base link restored', $roundtrip[0]->link === 'eth0', $roundtrip[0]->link);
+check('macvlan effective link', $roundtrip[0]->effectiveLink() === 'eth0.200');
 
 echo "\nNetwork: multiple interfaces\n";
 $a = NetworkInterface::fromRequest(['link' => 'br0', 'name' => 'eth0'], 0);

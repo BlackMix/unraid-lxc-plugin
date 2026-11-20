@@ -3,6 +3,38 @@ if ( window.history.replaceState ) {
   window.history.replaceState( null, null, window.location.href );
 }
 
+// Ensure the webGui CSRF token is sent on every plugin POST, even on releases
+// where the automatic jQuery prefilter is not present.
+(function ($) {
+  var token = window.LXCV2_CSRF || '';
+  if (!token) {
+    return;
+  }
+  $.ajaxPrefilter(function (options, originalOptions, jqXHR) {
+    if (options.url && options.url.indexOf('/plugins/lxc/') !== -1) {
+      jqXHR.setRequestHeader('X-CSRF-Token', token);
+    }
+  });
+})(jQuery);
+
+// The ajax endpoint answers JSON. jQuery may already parse it because of the
+// Content-Type, so accept both a string and an object.
+function lxcParseResponse(data) {
+  if (data && typeof data === 'object') {
+    return { ok: data.ok !== false, message: String(data.message || '') };
+  }
+  let text = String(data || '');
+  try {
+    let parsed = JSON.parse(text);
+    if (parsed && typeof parsed === 'object') {
+      return { ok: parsed.ok !== false, message: String(parsed.message || '') };
+    }
+  } catch (e) {
+    // plain text (older responses)
+  }
+  return { ok: text.toLowerCase().indexOf('error') === -1, message: text };
+}
+
 function postAction(name, id) {
   let postData = {
     'lxc'   : '',
@@ -156,9 +188,14 @@ function showStatus(action, id, title, text) {
         }, 5000);
       },
       success: function (data) {
-    if (data.toLowerCase().indexOf("error, failed to ") === -1) {
-          dialogContent.append("<p/>");
-    }
+        let result = lxcParseResponse(data);
+        let colour = result.ok ? 'green' : 'red';
+        dialogContent.append('<p style="color:' + colour + ';">' + $('<div>').text(result.message || (result.ok ? 'Done' : 'Operation failed')).html() + '</p>');
+        dialogContent.append('<p class="centered"><button class="logLine" type="button" onclick="top.Shadowbox.close(); location.href = \'/LXC\'">Done</button></p>');
+        clearInterval(statusInterval);
+      },
+      error: function (xhr) {
+        dialogContent.append('<p style="color:red;">Request failed (HTTP ' + xhr.status + ')</p>');
         dialogContent.append('<p class="centered"><button class="logLine" type="button" onclick="top.Shadowbox.close(); location.href = \'/LXC\'">Done</button></p>');
         clearInterval(statusInterval);
       }
@@ -221,13 +258,16 @@ function createContainer(name, description, distribution, release, startcont, au
         }, 5000);
       },
       success: function (data) {
-    if (data.toLowerCase().indexOf("error, failed to create container") === -1) {
+        let result = lxcParseResponse(data);
+        if (result.ok) {
           dialogContent.append("<p>To connect to the console from the container, start the container and select Console from the context menu.</p>");
           dialogContent.append("<p>If you want to connect to the container console from the Unraid terminal, start the container and type in:</p>");
           dialogContent.append("<p>lxc-attach " + name + "</p>")
           dialogContent.append('<p>It is recommended to attach to the corresponding shell by typing in for example:</p>');
           dialogContent.append("<p>lxc-attach " + name + " /bin/bash</p>");
-    }
+        } else {
+          dialogContent.append('<p style="color:red;">' + $('<div>').text(result.message).html() + '</p>');
+        }
         let HTMLline = '<p class="centered">';
         if (startcont) {
             HTMLline += '<button type="button" onclick="startConsole(\'' + name + '\', true);">Open Terminal</button>';
@@ -293,9 +333,12 @@ function createContainerCAApp(name, description, repository, webui, icon, startc
         }, 5000);
       },
       success: function (data) {
-    if (data.toLowerCase().indexOf("error, failed to create container") === -1) {
+        let result = lxcParseResponse(data);
+        if (result.ok) {
           dialogContent.append("<p>Check out the README.md from the container if further steps are necessary to configure the container!</p>");
-    }
+        } else {
+          dialogContent.append('<p style="color:red;">' + $('<div>').text(result.message).html() + '</p>');
+        }
         let HTMLline = '<p class="centered">';
         if (startcont) {
             HTMLline += '<button type="button" onclick="startConsole(\'' + name + '\', true);">Open Terminal</button>';
@@ -354,6 +397,10 @@ function createCopy(name, description, container, autostart, mac) {
         }, 5000);
       },
       success: function (data) {
+        let result = lxcParseResponse(data);
+        if (!result.ok) {
+          dialogContent.append('<p style="color:red;">' + $('<div>').text(result.message).html() + '</p>');
+        }
         dialogContent.append("<p>To connect to the console from the container, start the container and select Console from the context menu.</p>");
         dialogContent.append("<p>If you want to connect to the container console from the Unraid terminal, start the container and type in:</p>");
         dialogContent.append("<p>lxc-attach " + name + "</p>")
@@ -488,12 +535,17 @@ $(function() {
           }, 5000);
         },
         success: function (data) {
-          dialogContent.append("<p style=\"color:green;\">Restoring container " + name + " done!</p>");
-          dialogContent.append("<p>To connect to the console from the container, start the container and select Console from the context menu.</p>");
-          dialogContent.append("<p>If you want to connect to the container console from the Unraid terminal, start the container and type in:</p>");
-          dialogContent.append("<p>lxc-attach " + name + "</p>")
-          dialogContent.append('<p>It is recommended to attach to the corresponding shell by typing in for example:</p>');
-          dialogContent.append("<p>lxc-attach " + name + " /bin/bash</p>");
+          let result = lxcParseResponse(data);
+          if (!result.ok) {
+            dialogContent.append('<p style="color:red;">' + $('<div>').text(result.message).html() + '</p>');
+          } else {
+            dialogContent.append("<p style=\"color:green;\">Restoring container " + name + " done!</p>");
+            dialogContent.append("<p>To connect to the console from the container, start the container and select Console from the context menu.</p>");
+            dialogContent.append("<p>If you want to connect to the container console from the Unraid terminal, start the container and type in:</p>");
+            dialogContent.append("<p>lxc-attach " + name + "</p>")
+            dialogContent.append('<p>It is recommended to attach to the corresponding shell by typing in for example:</p>');
+            dialogContent.append("<p>lxc-attach " + name + " /bin/bash</p>");
+            }
           dialogContent.append('<p class="centered"><button class="logLine" type="button" onclick="top.Shadowbox.close(); location.href = \'/LXC\'">Done</button></p>');
           clearInterval(statusInterval);
         }
@@ -551,13 +603,18 @@ $(function() {
           }, 5000);
         },
         success: function (data) {
-          dialogContent.append("<p style=\"color:green;\">Restoring container " + name + " done!</p>");
-          dialogContent.append("<p>To connect to the console from the container, start the container and select Console from the context menu.</p>");
-          dialogContent.append("<p>If you want to connect to the container console from the Unraid terminal, start the container and type in:</p>");
-          dialogContent.append("<p>lxc-attach " + name + "</p>")
-          dialogContent.append('<p>It is recommended to attach to the corresponding shell by typing in for example:</p>');
-          dialogContent.append("<p>lxc-attach " + name + " /bin/bash</p>");
-          dialogContent.append("<p>Note: You will only see as much backups as you have configured in the Global backups settings (oldest backups will be deleted first).</p>");
+          let result = lxcParseResponse(data);
+          if (!result.ok) {
+            dialogContent.append('<p style="color:red;">' + $('<div>').text(result.message).html() + '</p>');
+          } else {
+            dialogContent.append("<p style=\"color:green;\">Restoring container " + name + " done!</p>");
+            dialogContent.append("<p>To connect to the console from the container, start the container and select Console from the context menu.</p>");
+            dialogContent.append("<p>If you want to connect to the container console from the Unraid terminal, start the container and type in:</p>");
+            dialogContent.append("<p>lxc-attach " + name + "</p>")
+            dialogContent.append('<p>It is recommended to attach to the corresponding shell by typing in for example:</p>');
+            dialogContent.append("<p>lxc-attach " + name + " /bin/bash</p>");
+            dialogContent.append("<p>Note: You will only see as much backups as you have configured in the Global backups settings (oldest backups will be deleted first).</p>");
+            }
           dialogContent.append('<p class="centered"><button class="logLine" type="button" onclick="top.Shadowbox.close(); location.href = \'/LXC\'">Done</button></p>');
           clearInterval(statusInterval);
         },

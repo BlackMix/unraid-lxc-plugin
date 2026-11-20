@@ -20,6 +20,44 @@ function lxcJson(bool $ok, string $message, array $extra = [])
 }
 
 /**
+ * Defensive CSRF validation.
+ *
+ * The webGui already validates every same-origin POST in local_prepend.php and
+ * injects the token into jQuery requests. This adds a second check for the
+ * plugin endpoints. On releases without a token in var.ini (older Unraid) the
+ * check is skipped so the plugin keeps working.
+ */
+function lxcValidateCsrf(): void
+{
+    $var = @parse_ini_file('/var/local/emhttp/var.ini');
+    $expected = is_array($var) ? ($var['csrf_token'] ?? null) : null;
+    if (!is_string($expected) || $expected === '') {
+        return;
+    }
+
+    $provided = (string) ($_POST['csrf_token'] ?? '');
+    if ($provided === '') {
+        if (function_exists('getallheaders')) {
+            foreach (getallheaders() as $name => $value) {
+                if (strtolower($name) === 'x-csrf-token') {
+                    $provided = (string) $value;
+                    break;
+                }
+            }
+        }
+        if ($provided === '' && isset($_SERVER['HTTP_X_CSRF_TOKEN'])) {
+            $provided = (string) $_SERVER['HTTP_X_CSRF_TOKEN'];
+        }
+    }
+
+    if (!hash_equals($expected, $provided)) {
+        lxcJson(false, 'Invalid CSRF token. Reload the page and try again.');
+    }
+}
+
+lxcValidateCsrf();
+
+/**
  * Reject anything that is not a real container name.
  */
 function requireContainer(): string
@@ -327,8 +365,21 @@ if (isset($_POST['lxc'])) {
             $config = new ContainerConfig($name);
             Network::write($config, $interfaces);
 
+            // macvlan VLANs need a matching sub-interface on the host.
+            $warnings = [];
+            foreach ($interfaces as $nic) {
+                if ($nic->type !== 'macvlan' || $nic->vlanId === null) {
+                    continue;
+                }
+                $link = $nic->effectiveLink();
+                if (!is_dir('/sys/class/net/' . $link)) {
+                    $warnings[] = 'VLAN ' . $nic->vlanId . ': crie a sub-interface ' . $link . ' no host antes de iniciar o container.';
+                }
+            }
+
             $running = trim((string) LxcPaths::capture(['lxc-info', '-n', $name, '-sH'])) === 'RUNNING';
-            lxcJson(true, $running ? 'Network saved. Restart the container to apply it.' : 'Network saved.');
+            $message = $running ? 'Network saved. Restart the container to apply it.' : 'Network saved.';
+            lxcJson(true, $message . ($warnings !== [] ? ' ' . implode(' ', $warnings) : ''), ['warnings' => $warnings]);
 
         case 'saveDevices':
             $name = requireContainer();
