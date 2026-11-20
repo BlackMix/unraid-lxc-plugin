@@ -159,6 +159,7 @@ foreach ($pages as $page => $query) {
             check('links to editor', strpos($output, '/LXCEditContainer?name=ct1') !== false);
             check('actions are plain icons', strpos($output, 'lxcv2-row-icon') !== false);
             check('actions have no button frame', strpos($output, 'lxcv2-icon-btn') === false);
+            check('actions are anchors, not buttons', strpos($output, '<button type="button" class="lxcv2-row-icon') === false);
             check('stats tolerate parsed JSON', strpos($output, 'lxcAsArray') !== false);
             check('stats skip unchanged values', strpos($output, 'function lxcSet') !== false);
             check('stats render meters', strpos($output, 'lxcv2-meter-fill') !== false);

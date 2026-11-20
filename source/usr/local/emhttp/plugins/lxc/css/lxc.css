@@ -850,3 +850,43 @@ h3.startArray, h2.noContainers {
   outline: 2px solid var(--lxv2-accent);
   outline-offset: 2px;
 }
+
+/* Force bare icons even when a theme skins table links/buttons aggressively. */
+#lxc_table .lxcv2-row-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 24px !important;
+  height: 26px !important;
+  min-width: 24px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  text-decoration: none !important;
+  color: var(--lxv2-text) !important;
+  opacity: 0.55;
+  font-size: 15px !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+#lxc_table .lxcv2-row-icon:hover {
+  opacity: 1 !important;
+  background: transparent !important;
+  transform: scale(1.12);
+}
+
+#lxc_table .lxcv2-row-icon.ok { color: var(--lxv2-good) !important; }
+#lxc_table .lxcv2-row-icon.danger { color: var(--lxv2-bad) !important; }
+#lxc_table .lxcv2-row-icon.btn_dropdown { opacity: 0.4; }
+#lxc_table .lxcv2-row-icon:focus-visible {
+  outline: 2px solid var(--lxv2-accent) !important;
+  outline-offset: 2px !important;
+}

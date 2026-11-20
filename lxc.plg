@@ -3,11 +3,11 @@
   <!ENTITY name      "lxc">
   <!ENTITY title     "LXC v2">
   <!ENTITY author    "BlackMix">
-  <!ENTITY version   "2026.11.22">
+  <!ENTITY version   "2026.11.23">
   <!ENTITY launch    "Settings/LXCSettings">
   <!ENTITY gitURL    "https://github.com/&author;/unraid-&name;-plugin/raw/master">
   <!ENTITY pluginURL "&gitURL;/&name;.plg">
-  <!ENTITY md5       "fdd8a7391719434e0e64281dcb4fa76c">
+  <!ENTITY md5       "5635fef0f9f18b87ce3e461c5310140f">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
   <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 ]>
@@ -16,7 +16,7 @@
 
 <CHANGES>
 
-###2026.11.22
+###2026.11.23
 - LXC v2: reimplemented package on top of the previous LXC plugin, keeping the
   same internal id (lxc), the same configuration layout (/boot/config/plugins/lxc)
   and the same runtime packages so existing installations upgrade in place
@@ -40,7 +40,8 @@
 - Fix: the live stats no longer call JSON.parse on an already parsed jQuery
   response (Uncaught SyntaxError); CPU and memory are shown as compact meters
   and repaint only when the value actually changes (zero keeps the last value)
-- Container list actions are now plain icons placed side by side
+- Container list actions are now plain icon links placed side by side (no native
+  button skin, so every icon stays flat in all themes)
 - Fix: the container editor script now loads after the DOM, so the
   General/Network/Devices/SSH/Advanced tabs and the NIC cards work again
 - UI: theme aware palette built on the Dynamix CSS variables (light and dark
