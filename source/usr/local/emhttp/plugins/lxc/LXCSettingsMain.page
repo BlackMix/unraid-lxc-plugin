@@ -31,6 +31,8 @@ body{-webkit-overflow-scrolling:touch}
     SSH provisioning and resource limits are configured per container in the
     <b>container editor</b> (pencil icon on the <a href="/LXC">LXC v2</a> page).
     Source and releases: <a href="https://github.com/BlackMix/unraid-lxc-plugin" target="_blank" rel="noopener noreferrer">github.com/BlackMix/unraid-lxc-plugin</a>
+    <br>Runtime binaries: <code>LXC_BINARY_SOURCE=auto|fork</code> in <code>/boot/config/plugins/lxc/plugin.cfg</code>
+    (<code>fork</code> uses only the binaries published in your GitHub release).
   </span>
 </div>
 

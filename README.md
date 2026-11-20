@@ -122,10 +122,34 @@ Or from any Linux machine with `tar`:
 ./build.sh          # builds packages/lxc-<version>.txz and updates the md5 in lxc.plg
 ```
 
-Publish `lxc-<version>.txz` and its `.md5` in a GitHub release of
-`BlackMix/unraid-lxc-plugin`. The LXC runtime binaries (`LXC-<lxc-version>-<idx>.txz`)
-are downloaded from the same release; when the fork has no release yet the
-installer falls back to the upstream repository so the plugin still installs.
+Publish `lxc-<version>.txz` and its `.md5` in the `master` branch under
+`packages/` (the `.plg` fetches them from `raw.githubusercontent.com/.../master/packages/`).
+
+## Publishing the LXC runtime binaries on your GitHub
+
+The `.plg` also downloads the compiled LXC runtime (`LXC-<version>-<idx>.txz`).
+The source of those binaries is controlled by `LXC_BINARY_SOURCE` in
+`/boot/config/plugins/lxc/plugin.cfg`:
+
+| Value | Behaviour |
+|---|---|
+| `auto` (default) | Tries a release of `BlackMix/unraid-lxc-plugin`; if none exists, silently falls back to the upstream repository (message goes to syslog only) |
+| `fork` | Uses **only** your release. The install stops with a clear error if the release or the assets are missing |
+
+To go fully self-hosted:
+
+1. Build the runtime with `source/LXC-build-2.sh` for each Unraid build index
+   (produces `LXC-<lxc-version>-1.txz` and `LXC-<lxc-version>-2.txz` plus `.md5` files).
+2. Create a GitHub release in `BlackMix/unraid-lxc-plugin` with the **tag set to
+   the LXC version** (e.g. `6.0.0`) and upload all four files.
+3. Add this line to `/boot/config/plugins/lxc/plugin.cfg`:
+   ```
+   LXC_BINARY_SOURCE=fork
+   ```
+4. Verify with `./release-check.sh` before reinstalling the plugin.
+
+The next plugin install will then download everything from your GitHub and no
+fallback message will appear anywhere.
 
 ## Development
 

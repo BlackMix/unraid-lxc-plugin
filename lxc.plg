@@ -7,7 +7,7 @@
   <!ENTITY launch    "Settings/LXCSettings">
   <!ENTITY gitURL    "https://github.com/&author;/unraid-&name;-plugin/raw/master">
   <!ENTITY pluginURL "&gitURL;/&name;.plg">
-  <!ENTITY md5       "7fda4b5f4b9a68ec85d81c1ad2be7b5d">
+  <!ENTITY md5       "bf88cc4c857e05a61285f4df1375e923">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
   <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 ]>
@@ -37,6 +37,9 @@
 - Fix: VLAN on macvlan now uses the link.vlan sub-interface and warns when
   it does not exist on the host
 - Fix: destroy/snapshot/backup dialogs report errors from the JSON responses
+- Runtime binaries: LXC_BINARY_SOURCE=auto|fork in plugin.cfg; the upstream
+  fallback is now written only to syslog and a release-check.sh helper validates
+  the LXC assets published on your GitHub release
 
 </CHANGES>
 
@@ -88,7 +91,8 @@ LXC_BACKUP_THREADS=
 LXC_BACKUP_COMPRESSION=
 LXC_BACKUP_USE_SNAPSHOT=
 LXC_GITHUB_USER=
-LXC_GITHUB_TOKEN=' > "&plugin;/plugin.cfg"
+LXC_GITHUB_TOKEN=
+LXC_BINARY_SOURCE=auto' > "&plugin;/plugin.cfg"
 fi
 
 #Add AUTOSTART_DELAY entry if not exists
@@ -120,6 +124,9 @@ grep -q "LXC_GITHUB_USER=" &plugin;/plugin.cfg || echo "LXC_GITHUB_USER=" &gt;&g
 
 #Add LXC_GITHUB_TOKEN entry if not exists
 grep -q "LXC_GITHUB_TOKEN=" &plugin;/plugin.cfg || echo "LXC_GITHUB_TOKEN=" &gt;&gt; &plugin;/plugin.cfg
+
+#Add LXC_BINARY_SOURCE entry if not exists (auto | fork)
+grep -q "LXC_BINARY_SOURCE=" &plugin;/plugin.cfg || echo "LXC_BINARY_SOURCE=auto" &gt;&gt; &plugin;/plugin.cfg
 
 #Add BDEVTYPE entry if not exists
 grep -q "BDEVTYPE=" &plugin;/plugin.cfg || echo "BDEVTYPE=dir" &gt;&gt; &plugin;/plugin.cfg
@@ -158,9 +165,19 @@ LXC_DATADIRECTORY="$(cat &plugin;/lxc.conf | grep -n "lxc.lxcpath" | cut -d '=' 
 LXC_SERVICE="$(cat &plugin;/plugin.cfg | grep -nw "SERVICE" | cut -d '=' -f2 | sed 's/\"//g')"
 FORK_REPO="BlackMix/unraid-lxc-plugin"
 UPSTREAM_REPO="ich777/unraid-lxc-plugin"
+BINARY_SOURCE="$(grep -n "^LXC_BINARY_SOURCE=" &plugin;/plugin.cfg | cut -d '=' -f2 | sed 's/\"//g')"
+BINARY_SOURCE="${BINARY_SOURCE:-auto}"
+
 LAT_V="$(wget -qO- https://api.github.com/repos/${FORK_REPO}/releases/latest | jq -r '.tag_name')"
 if [ -z "${LAT_V}" ] || [ "${LAT_V}" == "null" ]; then
-  echo "---No release found on ${FORK_REPO}, using ${UPSTREAM_REPO} for the LXC binaries---"
+  if [ "${BINARY_SOURCE}" = "fork" ]; then
+    echo "---ERROR: no LXC release found on ${FORK_REPO}---"
+    echo "---Publish LXC-&lt;version&gt;-1.txz and LXC-&lt;version&gt;-2.txz on a release---"
+    exit 1
+  fi
+  # Fallback apenas no syslog: a tela de instalacao fica limpa.
+  # Defina LXC_BINARY_SOURCE=fork no plugin.cfg quando publicar o release.
+  echo "LXC: no release on ${FORK_REPO}, falling back to ${UPSTREAM_REPO} for runtime binaries" | logger
   LAT_V="$(wget -qO- https://api.github.com/repos/${UPSTREAM_REPO}/releases/latest | jq -r '.tag_name')"
   DL_URL="https://github.com/${UPSTREAM_REPO}/releases/download/${LAT_V}"
 else
