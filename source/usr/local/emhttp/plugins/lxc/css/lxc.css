@@ -495,3 +495,120 @@ h3.startArray, h2.noContainers {
   background: rgba(217, 83, 79, 0.12);
   font-weight: bold;
 }
+
+/* ========================================================================
+   LXC v2 - container list polish: plain icon actions + stat meters
+   ======================================================================== */
+
+.lxcv2-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+/* Icons only - no button frame, no background. */
+.lxcv2-row-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 26px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  opacity: 0.55;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity 120ms ease, transform 120ms ease, color 120ms ease;
+}
+
+.lxcv2-row-icon:hover {
+  opacity: 1;
+  transform: scale(1.12);
+}
+
+.lxcv2-row-icon:active {
+  transform: scale(0.94);
+}
+
+.lxcv2-row-icon.ok {
+  color: #2e9e4f;
+}
+
+.lxcv2-row-icon.danger {
+  color: #d9534f;
+}
+
+.lxcv2-row-icon.btn_dropdown {
+  opacity: 0.4;
+}
+
+/* Slightly denser, easier to scan rows */
+#lxc_table tbody tr:hover {
+  background: rgba(128, 128, 128, 0.07);
+}
+
+#lxc_table tbody td {
+  vertical-align: middle;
+}
+
+#lxc_table .ct-name font[size="+1"] {
+  font-weight: bold;
+}
+
+/* Stat meters -------------------------------------------------------------- */
+.lxcv2-meter {
+  position: relative;
+  width: 100%;
+  min-width: 96px;
+  max-width: 260px;
+  height: 18px;
+  margin: 3px 0;
+  border-radius: 3px;
+  overflow: hidden;
+  background: rgba(128, 128, 128, 0.18);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+.lxcv2-meter-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 3px 0 0 3px;
+  background: linear-gradient(90deg, #2e9e4f 0%, #7ec850 100%);
+  transition: width 350ms ease;
+}
+
+.lxcv2-meter-medium .lxcv2-meter-fill {
+  background: linear-gradient(90deg, #d38b1f 0%, #f0b429 100%);
+}
+
+.lxcv2-meter-high .lxcv2-meter-fill {
+  background: linear-gradient(90deg, #d9534f 0%, #ff7b54 100%);
+}
+
+.lxcv2-meter-label {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: bold;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.lxcv2-na {
+  opacity: 0.6;
+  font-size: 11px;
+}

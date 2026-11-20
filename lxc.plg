@@ -7,7 +7,7 @@
   <!ENTITY launch    "Settings/LXCSettings">
   <!ENTITY gitURL    "https://github.com/&author;/unraid-&name;-plugin/raw/master">
   <!ENTITY pluginURL "&gitURL;/&name;.plg">
-  <!ENTITY md5       "d067ee06c2930ecd109d3eb38d102e51">
+  <!ENTITY md5       "13d51bf05732d15ee230f8baebd37914">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
   <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 ]>
@@ -37,6 +37,10 @@
 - Fix: VLAN on macvlan now uses the link.vlan sub-interface and warns when
   it does not exist on the host
 - Fix: destroy/snapshot/backup dialogs report errors from the JSON responses
+- Fix: the live stats no longer call JSON.parse on an already parsed jQuery
+  response (Uncaught SyntaxError); CPU and memory are shown as compact meters
+  and repaint only when the value actually changes (zero keeps the last value)
+- Container list actions are now plain icons placed side by side
 - Runtime binaries: LXC_BINARY_SOURCE=auto|fork in plugin.cfg; the upstream
   fallback is now written only to syslog and a release-check.sh helper validates
   the LXC assets published on your GitHub release

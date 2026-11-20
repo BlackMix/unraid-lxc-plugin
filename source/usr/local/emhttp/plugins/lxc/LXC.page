@@ -306,17 +306,17 @@ foreach ($allContainers as $container) {
     <td class="lxcv2-row-actions">
       <?php $safeName = htmlspecialchars($container->name, ENT_QUOTES, 'UTF-8'); ?>
       <?php if ($container->state == "RUNNING") { ?>
-        <button type="button" class="lxcv2-icon-btn" title="Terminal" onclick="startConsole('<?= $safeName ?>')"><i class="fa fa-terminal"></i></button>
-        <button type="button" class="lxcv2-icon-btn" title="Restart" onclick="lxcRowAction('restartCONT','<?= $safeName ?>')"><i class="fa fa-refresh"></i></button>
-        <button type="button" class="lxcv2-icon-btn danger" title="Stop" onclick="lxcRowAction('stopCONT','<?= $safeName ?>')"><i class="fa fa-stop"></i></button>
+        <button type="button" class="lxcv2-row-icon" title="Terminal" onclick="startConsole('<?= $safeName ?>')"><i class="fa fa-terminal"></i></button>
+        <button type="button" class="lxcv2-row-icon" title="Restart" onclick="lxcRowAction('restartCONT','<?= $safeName ?>')"><i class="fa fa-refresh"></i></button>
+        <button type="button" class="lxcv2-row-icon danger" title="Stop" onclick="lxcRowAction('stopCONT','<?= $safeName ?>')"><i class="fa fa-stop"></i></button>
       <?php } elseif ($container->state == "FROZEN") { ?>
-        <button type="button" class="lxcv2-icon-btn" title="Unfreeze" onclick="lxcRowAction('unfreezeCONT','<?= $safeName ?>')"><i class="fa fa-snowflake-o"></i></button>
-        <button type="button" class="lxcv2-icon-btn danger" title="Kill" onclick="lxcRowAction('killCONT','<?= $safeName ?>')"><i class="fa fa-times"></i></button>
+        <button type="button" class="lxcv2-row-icon" title="Unfreeze" onclick="lxcRowAction('unfreezeCONT','<?= $safeName ?>')"><i class="fa fa-snowflake-o"></i></button>
+        <button type="button" class="lxcv2-row-icon danger" title="Kill" onclick="lxcRowAction('killCONT','<?= $safeName ?>')"><i class="fa fa-times"></i></button>
       <?php } else { ?>
-        <button type="button" class="lxcv2-icon-btn ok" title="Start" onclick="lxcRowAction('startCONT','<?= $safeName ?>')"><i class="fa fa-play"></i></button>
+        <button type="button" class="lxcv2-row-icon ok" title="Start" onclick="lxcRowAction('startCONT','<?= $safeName ?>')"><i class="fa fa-play"></i></button>
       <?php } ?>
-      <a class="lxcv2-icon-btn" title="Edit container" href="/LXCEditContainer?name=<?= urlencode($container->name) ?>"><i class="fa fa-edit"></i></a>
-      <button type="button" class="lxcv2-icon-btn btn_dropdown" title="More actions" onclick="showDropdown('<?= $safeName ?>')"><i class="fa fa-ellipsis-h"></i></button>
+      <a class="lxcv2-row-icon" title="Edit container" href="/LXCEditContainer?name=<?= urlencode($container->name) ?>"><i class="fa fa-edit"></i></a>
+      <button type="button" class="lxcv2-row-icon btn_dropdown" title="More actions" onclick="showDropdown('<?= $safeName ?>')"><i class="fa fa-ellipsis-h"></i></button>
     </td>
   </tr>
   <? } ?>
@@ -368,27 +368,95 @@ if (count($differences) > 0) {
 <script>
   var containerNames = <?= json_encode($containerNames); ?>;
   var setMemory = <?= json_encode($setcontainerMem); ?>;
+  var cpuCount = <?= (int) $cpu_count ?> || 1;
+  var lastStats = Object.create(null);
+
+  function lxcEscape(value) {
+    return String(value === null || value === undefined ? '' : value)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // The endpoint sends application/json, so jQuery usually parses it already.
+  // Accepting a string as well avoids "JSON.parse: unexpected character".
+  function lxcAsArray(response) {
+    if (Array.isArray(response)) return response;
+    if (typeof response !== 'string') return [];
+    try {
+      var parsed = JSON.parse(String(response));
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function lxcBytes(value) {
+    if (value === null || value === undefined) return null;
+    var text = String(value).trim();
+    var match = text.match(/^([0-9]+(?:\.[0-9]+)?)\s*([KMGTP]?)(?:i?B)?$/i);
+    if (!match) return null;
+    var factors = { '': 1, K: 1024, M: 1048576, G: 1073741824, T: 1099511627776 };
+    return parseFloat(match[1]) * (factors[(match[2] || '').toUpperCase()] || 1);
+  }
+
+  function lxcMeter(percent, label) {
+    var p = Math.max(0, Math.min(100, Math.round(percent)));
+    var level = p >= 85 ? 'high' : (p >= 60 ? 'medium' : 'low');
+    return '<div class="lxcv2-meter lxcv2-meter-' + level + '">' +
+             '<div class="lxcv2-meter-fill" style="width:' + p + '%"></div>' +
+             '<span class="lxcv2-meter-label">' + lxcEscape(label) + '</span></div>';
+  }
+
+  function lxcSet(id, html, isZero) {
+    var previous = lastStats[id];
+    // Do not repaint when nothing new arrived (0), but always render the
+    // initial zero state so the loading spinner disappears.
+    if (isZero && previous !== undefined) return;
+    if (previous === html) return;
+    lastStats[id] = html;
+    var el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  }
+
   function updateValues() {
     $.ajax({
       url: '/plugins/lxc/include/ajax.php',
       type: 'POST',
       data: {action: 'updateValues', containerNames: JSON.stringify(containerNames)},
-      success: function(response) {
-        var data = JSON.parse(response);
+      success: function (response) {
+        var data = lxcAsArray(response);
         for (var i = 0; i < data.length; i++) {
-          if ((data[i].cpu_usage) === "na") {
-            $('#cpu_usage-' + data[i].name).html("N/A");
+          var item = data[i];
+          var name = item.name;
+          if (!name || containerNames.indexOf(name) === -1) continue;
+
+          if (item.cpu_usage === 'na') {
+            lxcSet('cpu_usage-' + name, '<span class="lxcv2-na">N/A</span>', false);
           } else {
-            var cpuUsageWithCpuCount = ((data[i].cpu_usage) / <?= $cpu_count ?>);
-            $('#cpu_usage-' + data[i].name).html(cpuUsageWithCpuCount.toFixed(0) + "%");
+            var cpu = Number(item.cpu_usage || 0);
+            var cpuPct = cpu / cpuCount;
+            lxcSet('cpu_usage-' + name, lxcMeter(cpuPct, cpuPct.toFixed(0) + '%'), cpu === 0);
           }
-          $('#memoryUse-' + data[i].name).html(data[i].memoryUse + ' / ' + setMemory[data[i].name]);
-          $('#ips-' + data[i].name).html(data[i].ips);
-          $('#totalBytes-' + data[i].name).html(data[i].totalBytes);
+
+          var used = lxcBytes(item.memoryUse);
+          var total = lxcBytes(setMemory[name]);
+          if (used === null || total === null || total <= 0) {
+            lxcSet('memoryUse-' + name,
+              '<span class="lxcv2-na">' + lxcEscape(item.memoryUse || '') + '</span>',
+              used === 0);
+          } else {
+            lxcSet('memoryUse-' + name,
+              lxcMeter(used / total * 100, item.memoryUse + ' / ' + setMemory[name]),
+              used === 0);
+          }
+
+          lxcSet('ips-' + name, lxcEscape(item.ips || '—'), false);
+          lxcSet('totalBytes-' + name, lxcEscape(item.totalBytes || '—'), false);
         }
       }
     });
   }
+  updateValues();
   setInterval(updateValues, 2000);
 </script>
 <?php } ?>

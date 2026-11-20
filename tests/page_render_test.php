@@ -150,6 +150,12 @@ foreach ($pages as $page => $query) {
             check('has actions column', strpos($output, 'Actions') !== false);
             check('has inline terminal icon', strpos($output, 'fa-terminal') !== false);
             check('links to editor', strpos($output, '/LXCEditContainer?name=ct1') !== false);
+            check('actions are plain icons', strpos($output, 'lxcv2-row-icon') !== false);
+            check('actions have no button frame', strpos($output, 'lxcv2-icon-btn') === false);
+            check('stats tolerate parsed JSON', strpos($output, 'lxcAsArray') !== false);
+            check('stats skip unchanged values', strpos($output, 'function lxcSet') !== false);
+            check('stats render meters', strpos($output, 'lxcv2-meter-fill') !== false);
+            check('no direct JSON.parse on response', strpos($output, 'JSON.parse(response)') === false);
         }
 
         if ($page === 'LXCAddContainer.page') {

@@ -715,7 +715,7 @@ $(function() {
           }
         });
       });
-    } else if ($(e.target).attr("class") === "btn_dropdown") {
+    } else if ($(e.target).hasClass("btn_dropdown")) {
       var dropdowns = document.getElementsByClassName("dropdown-menu");
       for (var i = 0; i < dropdowns.length; i++) {
         var openDropdown = dropdowns[i];
