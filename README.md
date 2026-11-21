@@ -43,7 +43,11 @@ Open it with the pencil icon. It has five tabs:
 ### Network
 
 * **DHCP** — no address is written, the container fetches a lease.
-* **Static IPv4** — `address/prefix` plus optional gateway.
+* **Static IPv4** — `address/prefix` plus optional gateway. A prefix is required;
+  entering `192.168.1.50` is normalised to `192.168.1.50/24` (`/24` is the
+  netmask — LXC has no separate netmask key).
+* **DNS** — up to three servers, applied only with **static IPv4** (or disabled).
+  With DHCP the container uses whatever DNS the DHCP server advertises.
 * **IPv6** — disabled, `auto` (SLAAC) or static with gateway.
 * **VLAN** — for `veth` interfaces the tag is written as
   `lxc.net.N.veth.vlan.id`; for `macvlan` the plugin attaches to
@@ -55,6 +59,24 @@ Open it with the pencil icon. It has five tabs:
 The plugin owns the `lxc.net.*` block and rewrites it atomically, so editing the
 same container twice does not duplicate lines. Legacy (unmarked) `lxc.net.*`
 lines are migrated into the managed block on the first save.
+
+**Guest network configuration.** Saving a static (or disabled) IPv4 address also
+writes the matching configuration inside the container rootfs so the guest's own
+network stack does not overwrite the address on boot: `ifupdown` stanzas become
+`inet manual`, `systemd-networkd` gets a `00-lxcv2-<nic>.network`, `netplan` gets
+`99-lxcv2.yaml`, and NetworkManager is told to leave those interfaces alone. DNS
+is written via `systemd-resolved` when available and/or a managed block in
+`/etc/resolv.conf` (symlinks are never followed). **Restart the container** after
+changing network settings. Custom DNS is not applied with DHCP — the DHCP
+server's DNS is used instead.
+
+This guest configuration is applied only to `dir:`, `btrfs:` and `zfs:` rootfs
+paths contained in the LXC data path. LVM/overlay and ZFS datasets mounted
+outside that path keep the default LXC behaviour (the guest init may overwrite
+a static address). Copying or restoring a container also copies its static IP
+and DNS — check for conflicts before starting it. Changing the global default
+interface under Settings does not reapply guest configuration; re-save the
+container's network afterwards.
 
 ### GPU passthrough
 

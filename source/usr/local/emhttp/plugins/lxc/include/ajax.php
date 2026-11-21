@@ -4,6 +4,7 @@ require_once __DIR__ . '/Settings.php';
 require_once __DIR__ . '/Paths.php';
 require_once __DIR__ . '/ContainerConfig.php';
 require_once __DIR__ . '/Network.php';
+require_once __DIR__ . '/GuestNetwork.php';
 require_once __DIR__ . '/Devices.php';
 require_once __DIR__ . '/Resources.php';
 require_once __DIR__ . '/Ssh.php';
@@ -196,6 +197,7 @@ if (isset($_POST['lxc'])) {
                 }
             }
 
+            $warnings = [];
             ob_start();
             createContainer(
                 $name,
@@ -211,13 +213,34 @@ if (isset($_POST['lxc'])) {
             // Apply the network before the first boot so the container never
             // starts with the template default interface.
             if ($interfaces !== null && LxcPaths::containerExists($name)) {
-                Network::write(new ContainerConfig($name), $interfaces);
+                if (!Network::write(new ContainerConfig($name), $interfaces)) {
+                    lxcJson(false, 'Container created but NOT started: its network configuration could not be saved. Fix it and start the container manually.');
+                }
+                $guest = GuestNetwork::apply($name, $interfaces);
+                if (!$guest['ok']) {
+                    $soft = false;
+                    foreach ($guest['messages'] as $gm) {
+                        if (stripos($gm, 'not supported') !== false
+                            || stripos($gm, 'not mounted') !== false
+                            || stripos($gm, 'outside this container') !== false) {
+                            $soft = true;
+                        }
+                    }
+                    if (!$soft) {
+                        lxcJson(false, 'Container created but NOT started: guest network configuration failed. ' . implode(' ', $guest['messages']) . ' Fix it and start the container manually.');
+                    }
+                    $warnings = $guest['messages'];
+                }
                 if ($startAfterCreate) {
                     (new Container($name))->startContainer();
                 }
             }
 
-            lxcJson(strpos((string) $output, 'ERROR') === false, trim((string) $output) ?: 'Container created.');
+            $message = trim((string) $output) ?: 'Container created.';
+            if ($warnings !== []) {
+                $message .= ' ' . implode(' ', $warnings);
+            }
+            lxcJson(strpos((string) $output, 'ERROR') === false, $message, ['warnings' => $warnings]);
 
         case 'copyCONT':
             $name = (string) ($_POST['name'] ?? '');
@@ -228,7 +251,7 @@ if (isset($_POST['lxc'])) {
             ob_start();
             copyContainer($name, (string) ($_POST['description'] ?? ''), $source, (string) ($_POST['autostart'] ?? ''), (string) ($_POST['mac'] ?? ''));
             $output = ob_get_clean();
-            lxcJson(true, trim((string) $output) ?: 'Container copied.');
+            lxcJson(true, (trim((string) $output) ?: 'Container copied.') . ' Note: the static IP and DNS from the source container were inherited; change them before starting both containers on the same network.');
 
         case 'fromSnapshot':
             $name = (string) ($_POST['name'] ?? '');
@@ -237,7 +260,7 @@ if (isset($_POST['lxc'])) {
             }
             ob_start();
             createFromSnapshot($name, (string) ($_POST['description'] ?? ''), (string) ($_POST['container'] ?? ''), (string) ($_POST['snapshot'] ?? ''), (string) ($_POST['autostart'] ?? ''), (string) ($_POST['mac'] ?? ''));
-            lxcJson(true, trim((string) ob_get_clean()) ?: 'Container restored.');
+            lxcJson(true, (trim((string) ob_get_clean()) ?: 'Container restored.') . ' Note: the stored static IP and DNS were restored; check for IP conflicts before starting it.');
 
         case 'fromBackup':
             $name = (string) ($_POST['name'] ?? '');
@@ -246,7 +269,7 @@ if (isset($_POST['lxc'])) {
             }
             ob_start();
             createFromBackup($name, (string) ($_POST['description'] ?? ''), (string) ($_POST['container'] ?? ''), (string) ($_POST['backup'] ?? ''), (string) ($_POST['autostart'] ?? ''), (string) ($_POST['mac'] ?? ''));
-            lxcJson(true, trim((string) ob_get_clean()) ?: 'Container restored.');
+            lxcJson(true, (trim((string) ob_get_clean()) ?: 'Container restored.') . ' Note: the stored static IP and DNS were restored; check for IP conflicts before starting it.');
 
         case 'createTEMPLATE':
             $name = (string) ($_POST['name'] ?? '');
@@ -363,7 +386,9 @@ if (isset($_POST['lxc'])) {
             }
 
             $config = new ContainerConfig($name);
-            Network::write($config, $interfaces);
+            if (!Network::write($config, $interfaces)) {
+                lxcJson(false, 'Could not save the container configuration.');
+            }
 
             // macvlan VLANs need a matching sub-interface on the host.
             $warnings = [];
@@ -375,6 +400,12 @@ if (isset($_POST['lxc'])) {
                 if (!is_dir('/sys/class/net/' . $link)) {
                     $warnings[] = 'VLAN ' . $nic->vlanId . ': crie a sub-interface ' . $link . ' no host antes de iniciar o container.';
                 }
+            }
+
+            $guest = GuestNetwork::apply($name, $interfaces);
+            $warnings = array_merge($warnings, $guest['messages']);
+            if (!$guest['ok']) {
+                lxcJson(false, 'Network saved, but the guest configuration failed: ' . implode(' ', $guest['messages']), ['warnings' => $warnings]);
             }
 
             $running = trim((string) LxcPaths::capture(['lxc-info', '-n', $name, '-sH'])) === 'RUNNING';

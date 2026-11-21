@@ -217,6 +217,7 @@ foreach ($pages as $page => $query) {
             check('has ssh tab', strpos($output, 'id="tab-ssh"') !== false);
             check('preloads nic json', strpos($output, 'window.LXCV2_EDIT') !== false);
             check('nic json has static ipv4', strpos($output, '192.168.1.50/24') !== false);
+            check('nic json exposes dns', strpos($output, '"dns"') !== false);
             check('detects distribution', strpos($output, 'debian.png') !== false);
             check('description rendered', strpos($output, 'Demo container') !== false);
             $scriptPos = strpos($output, 'lxc-edit.js');
@@ -247,6 +248,7 @@ foreach ($pages as $page => $query) {
             check('has network type field', strpos($output, 'contNetType') !== false);
             check('has vlan field', strpos($output, 'contNetVlan') !== false);
             check('has ipv6 field', strpos($output, 'contIpv6Mode') !== false);
+            check('has DNS field', strpos($output, 'contDns') !== false);
         }
     } catch (Throwable $e) {
         $failures++;

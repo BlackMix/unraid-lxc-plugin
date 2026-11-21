@@ -207,6 +207,15 @@ $avail_images_json = json_encode($avail_images);
 
     <div class="">
       <dl>
+        <dt>DNS servers:</dt>
+        <dd><input type="text" name="contDns" placeholder="1.1.1.1, 8.8.8.8 (max 3)">
+        <p style="font-size:9pt;opacity:.8;">Custom DNS applies only with static IPv4. With DHCP, the container uses the DNS server advertised by DHCP.</p>
+        </dd>
+      </dl>
+    </div>
+
+    <div class="">
+      <dl>
         <dt>Autostart:</dt>
         <dd><input type="checkbox" name="contAutostart"></dd>
       </dl>

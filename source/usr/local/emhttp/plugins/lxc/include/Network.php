@@ -25,6 +25,9 @@ class NetworkInterface
     public string $ipv6Address = '';
     public string $ipv6Gateway = '';
 
+    /** @var string[] DNS server IPs (max 3) */
+    public array $dns = [];
+
     public bool $flagsUp = true;
 
     public function effectiveLink(): string
@@ -112,7 +115,8 @@ class NetworkInterface
         $nic->index = $index;
         $nic->type = $values['type'] ?? 'veth';
         $nic->link = $values['link'] ?? 'br0';
-        $nic->name = $values['name'] ?? ('eth' . $index);
+        $rawName = $values['name'] ?? ('eth' . $index);
+        $nic->name = ctype_digit($rawName) ? ('eth' . $index) : $rawName;
         $nic->hwaddr = strtoupper($values['hwaddr'] ?? '');
         $nic->macvlanMode = $values['macvlan.mode'] ?? 'bridge';
         $nic->vethMode = $values['veth.mode'] ?? 'bridge';
@@ -124,27 +128,35 @@ class NetworkInterface
         }
 
         $ipv4 = $values['ipv4.address'] ?? '';
-        if ($ipv4 === '') {
-            $nic->ipv4Mode = 'dhcp';
-        } elseif (strtolower($ipv4) === 'none') {
+        $v4Lower = strtolower($ipv4);
+        if ($v4Lower === 'none') {
             $nic->ipv4Mode = 'none';
         } else {
-            $nic->ipv4Mode = 'static';
-            $nic->ipv4Address = $ipv4;
-            $nic->ipv4Gateway = $values['ipv4.gateway'] ?? '';
+            $normalised = self::normalizeIpv4Cidr($ipv4);
+            if ($ipv4 === '' || $normalised === null) {
+                // Missing or corrupt raw config: fall back to DHCP, never emit garbage.
+                $nic->ipv4Mode = 'dhcp';
+            } else {
+                $nic->ipv4Mode = 'static';
+                $nic->ipv4Address = $normalised;
+                $gateway = trim($values['ipv4.gateway'] ?? '');
+                $nic->ipv4Gateway = self::isValidIp($gateway, true) ? $gateway : '';
+            }
         }
 
         $ipv6 = $values['ipv6.address'] ?? '';
-        if ($ipv6 === '') {
+        $v6Lower = strtolower($ipv6);
+        if ($ipv6 === '' || $v6Lower === 'none') {
             $nic->ipv6Mode = 'none';
-        } elseif (strtolower($ipv6) === 'auto') {
+        } elseif ($v6Lower === 'auto') {
             $nic->ipv6Mode = 'auto';
-        } elseif (strtolower($ipv6) === 'none') {
+        } elseif (!self::isValidIpv6Cidr($ipv6)) {
             $nic->ipv6Mode = 'none';
         } else {
             $nic->ipv6Mode = 'static';
-            $nic->ipv6Address = $ipv6;
-            $nic->ipv6Gateway = $values['ipv6.gateway'] ?? '';
+            $nic->ipv6Address = self::normalizeIpv6Cidr($ipv6) ?? $ipv6;
+            $gateway = trim($values['ipv6.gateway'] ?? '');
+            $nic->ipv6Gateway = self::isValidIp($gateway, false) ? $gateway : '';
         }
 
         return $nic;
@@ -171,7 +183,7 @@ class NetworkInterface
         $nic->link = $link;
 
         $name = (string) ($data['name'] ?? ('eth' . $index));
-        if (preg_match('/^[A-Za-z0-9_.-]{1,15}$/', $name) !== 1) {
+        if (preg_match('/^[A-Za-z0-9_.-]{1,15}$/', $name) !== 1 || ctype_digit($name)) {
             throw new InvalidArgumentException('Invalid in-container interface name: ' . $name);
         }
         $nic->name = $name;
@@ -206,9 +218,9 @@ class NetworkInterface
         $nic->ipv4Mode = in_array($ipv4Mode, ['dhcp', 'static', 'none'], true) ? $ipv4Mode : 'dhcp';
 
         if ($nic->ipv4Mode === 'static') {
-            $address = trim((string) ($data['ipv4Address'] ?? ''));
-            if (!self::isValidIpv4Cidr($address)) {
-                throw new InvalidArgumentException('Invalid IPv4 address (expected e.g. 192.168.1.50/24): ' . $address);
+            $address = self::normalizeIpv4Cidr((string) ($data['ipv4Address'] ?? ''));
+            if ($address === null) {
+                throw new InvalidArgumentException('Invalid IPv4 address (expected e.g. 192.168.1.50/24): ' . (string) ($data['ipv4Address'] ?? ''));
             }
             $nic->ipv4Address = $address;
 
@@ -223,9 +235,9 @@ class NetworkInterface
         $nic->ipv6Mode = in_array($ipv6Mode, ['none', 'auto', 'static'], true) ? $ipv6Mode : 'none';
 
         if ($nic->ipv6Mode === 'static') {
-            $address = trim((string) ($data['ipv6Address'] ?? ''));
-            if (!self::isValidIpv6Cidr($address)) {
-                throw new InvalidArgumentException('Invalid IPv6 address (expected e.g. fd00::50/64): ' . $address);
+            $address = self::normalizeIpv6Cidr((string) ($data['ipv6Address'] ?? ''));
+            if ($address === null) {
+                throw new InvalidArgumentException('Invalid IPv6 address (expected e.g. fd00::50/64): ' . (string) ($data['ipv6Address'] ?? ''));
             }
             $nic->ipv6Address = $address;
 
@@ -236,44 +248,112 @@ class NetworkInterface
             $nic->ipv6Gateway = $gateway;
         }
 
+        $nic->dns = self::normalizeDns($data['dns'] ?? []);
+
         return $nic;
+    }
+
+    /**
+     * Normalise a user supplied DNS list (array or separated string).
+     * Deduplicates, preserves order and caps at three servers.
+     *
+     * @param mixed $value
+     * @return string[]
+     */
+    public static function normalizeDns($value, bool $strict = true): array
+    {
+        if (is_string($value)) {
+            $value = preg_split('/[\s,;]+/', trim($value), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        }
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($value as $ip) {
+            $ip = trim((string) $ip);
+            if ($ip === '') {
+                continue;
+            }
+            if (filter_var($ip, FILTER_VALIDATE_IP) === false) {
+                if ($strict) {
+                    throw new InvalidArgumentException('Invalid DNS server: ' . $ip);
+                }
+                continue;
+            }
+            if (!in_array($ip, $out, true)) {
+                $out[] = $ip;
+            }
+            if (count($out) >= 3) {
+                break;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Normalise an IPv4 address to CIDR notation. A missing prefix becomes /24.
+     * Returns null when the value is not a valid IPv4 address or prefix.
+     */
+    public static function normalizeIpv4Cidr(string $value): ?string
+    {
+        $value = trim($value);
+        if (preg_match('#^([0-9]{1,3}(\.[0-9]{1,3}){3})(?:/([0-9]{1,2}))?$#', $value, $m) !== 1) {
+            return null;
+        }
+        if (filter_var($m[1], FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
+            return null;
+        }
+        $prefix = 24;
+        if (isset($m[3]) && $m[3] !== '') {
+            $prefix = (int) $m[3];
+            if ($prefix < 0 || $prefix > 32) {
+                return null;
+            }
+        }
+
+        return $m[1] . '/' . $prefix;
     }
 
     public static function isValidIpv4Cidr(string $value): bool
     {
-        if (preg_match('#^([0-9]{1,3}(\.[0-9]{1,3}){3})(/([0-9]{1,2}))?$#', $value, $m) !== 1) {
-            return false;
+        return self::normalizeIpv4Cidr($value) !== null;
+    }
+
+    public static function isValidIp(string $value, bool $ipv4): bool
+    {
+        return filter_var(trim($value), FILTER_VALIDATE_IP, $ipv4 ? FILTER_FLAG_IPV4 : FILTER_FLAG_IPV6) !== false;
+    }
+
+    /**
+     * Normalise an IPv6 address to CIDR. A missing prefix becomes /64.
+     * Returns null for invalid addresses or prefixes.
+     */
+    public static function normalizeIpv6Cidr(string $value): ?string
+    {
+        $value = trim($value);
+        $parts = explode('/', $value, 2);
+        if (filter_var($parts[0], FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === false) {
+            return null;
         }
-        if (filter_var($m[1], FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
-            return false;
-        }
-        if (isset($m[3]) && $m[3] !== '') {
-            $prefix = (int) $m[4];
-            if ($prefix < 0 || $prefix > 32) {
-                return false;
+        $prefix = 64;
+        if (isset($parts[1])) {
+            if (preg_match('/^\d{1,3}$/', $parts[1]) !== 1) {
+                return null;
+            }
+            $prefix = (int) $parts[1];
+            if ($prefix < 0 || $prefix > 128) {
+                return null;
             }
         }
 
-        return true;
+        return $parts[0] . '/' . $prefix;
     }
 
     public static function isValidIpv6Cidr(string $value): bool
     {
-        $parts = explode('/', $value, 2);
-        if (filter_var($parts[0], FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === false) {
-            return false;
-        }
-        if (isset($parts[1])) {
-            if (preg_match('/^\d{1,3}$/', $parts[1]) !== 1) {
-                return false;
-            }
-            $prefix = (int) $parts[1];
-            if ($prefix < 0 || $prefix > 128) {
-                return false;
-            }
-        }
-
-        return true;
+        return self::normalizeIpv6Cidr($value) !== null;
     }
 }
 
@@ -367,9 +447,17 @@ final class Network
         // Remember macvlan VLAN tags: they are encoded in the link name and
         // would otherwise be lost when the config is read back.
         $macvlanVlans = [];
+        $dnsByIndex = [];
         foreach ($config->lines() as $line) {
-            if (preg_match('/^#@macvlan_vlan\s+(\d+)\s+(\d{1,4})$/', trim($line), $m) === 1) {
+            $trimmed = trim($line);
+            if (preg_match('/^#@macvlan_vlan\s+(\d+)\s+(\d{1,4})$/', $trimmed, $m) === 1) {
                 $macvlanVlans[(int) $m[1]] = (int) $m[2];
+            }
+            if (preg_match('/^#@dns\s+(\d+)\s+(\S+)$/', $trimmed, $m) === 1) {
+                $ip = trim($m[2]);
+                if (filter_var($ip, FILTER_VALIDATE_IP) !== false) {
+                    $dnsByIndex[(int) $m[1]][] = $ip;
+                }
             }
         }
 
@@ -387,6 +475,9 @@ final class Network
                 if (substr($nic->link, -strlen($suffix)) === $suffix) {
                     $nic->link = substr($nic->link, 0, -strlen($suffix));
                 }
+            }
+            if (isset($dnsByIndex[(int) $index])) {
+                $nic->dns = NetworkInterface::normalizeDns($dnsByIndex[(int) $index], false);
             }
             $interfaces[] = $nic;
         }
@@ -427,15 +518,16 @@ final class Network
      *
      * @param NetworkInterface[] $interfaces
      */
-    public static function write(ContainerConfig $config, array $interfaces): void
+    public static function write(ContainerConfig $config, array $interfaces): bool
     {
         if ($interfaces === []) {
             $interfaces = [self::defaultInterface()];
         }
 
         // One time migration: remove every legacy lxc.net.* line so the block
-        // below is the single source of truth.
+        // below is the single source of truth. DNS metadata is rewritten below.
         $config->removeMatching('/^\s*lxc\.net\.\d+\./');
+        $config->removeMatching('/^\s*#@dns\s/');
 
         $body = [];
         foreach (array_values($interfaces) as $index => $nic) {
@@ -446,13 +538,17 @@ final class Network
             if ($nic->type === 'macvlan' && $nic->vlanId !== null) {
                 $body[] = '#@macvlan_vlan ' . $index . ' ' . $nic->vlanId;
             }
+            foreach ($nic->dns as $ip) {
+                $body[] = '#@dns ' . $index . ' ' . $ip;
+            }
             foreach ($nic->toLines() as $line) {
                 $body[] = $line;
             }
         }
 
         $config->setBlock(ContainerConfig::TAG_NETWORK, $body);
-        $config->save();
+
+        return $config->save();
     }
 
     /**

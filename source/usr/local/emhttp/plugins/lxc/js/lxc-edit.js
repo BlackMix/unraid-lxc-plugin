@@ -141,6 +141,9 @@
     html += '<input data-field="ipv6Gateway" value="' + escapeHtml(nic.ipv6Gateway) + '" placeholder="gateway">';
     html += '</dd></dl>';
 
+    html += '<dl><dt>DNS servers</dt><dd><input data-field="dns" value="' + escapeHtml((nic.dns || []).join(', ')) + '" placeholder="1.1.1.1, 8.8.8.8 (max 3)"></dd></dl>';
+    html += '<p style="font-size:9pt;opacity:.8;">Custom DNS applies only with static IPv4. With DHCP, the container uses the DNS server advertised by DHCP.</p>';
+
     html += '<dl><dt>Advanced</dt><dd class="lxcv2-inline">';
     html += '<label class="lxcv2-check"><input type="checkbox" data-field="flagsDown"' + (nic.flagsDown ? ' checked' : '') + '> <span>link down</span></label>';
     html += '<label class="lxcv2-check"><input type="checkbox" data-field="vethRouter"' + (nic.vethMode === 'router' ? ' checked' : '') + '> <span>veth router mode</span></label>';
@@ -157,7 +160,7 @@
       return;
     }
     if (!EDIT.nics.length) {
-      EDIT.nics.push({ type: 'veth', link: 'br0', name: 'eth0', hwaddr: '', vlanId: null, ipv4Mode: 'dhcp', ipv4Address: '', ipv4Gateway: '', ipv6Mode: 'none', ipv6Address: '', ipv6Gateway: '' });
+      EDIT.nics.push({ type: 'veth', link: 'br0', name: 'eth0', hwaddr: '', vlanId: null, ipv4Mode: 'dhcp', ipv4Address: '', ipv4Gateway: '', ipv6Mode: 'none', ipv6Address: '', ipv6Gateway: '', dns: [] });
     }
     container.innerHTML = EDIT.nics.map(nicCard).join('');
   }
@@ -188,6 +191,7 @@
         ipv6Mode: field('ipv6Mode'),
         ipv6Address: field('ipv6Address'),
         ipv6Gateway: field('ipv6Gateway'),
+        dns: field('dns').split(/[\s,;]+/).filter(Boolean),
         flagsDown: checked('flagsDown'),
         vethMode: checked('vethRouter') ? 'router' : 'bridge'
       });
@@ -222,6 +226,16 @@
       }
       if (nic.ipv6Mode === 'static' && !ipv6.test(nic.ipv6Address)) {
         return 'Interface ' + i + ': invalid IPv6 address (expected fd00::50/64).';
+      }
+      if (nic.dns && nic.dns.length > 3) {
+        return 'Interface ' + i + ': at most 3 DNS servers are supported.';
+      }
+      if (nic.dns) {
+        for (var d = 0; d < nic.dns.length; d++) {
+          if (!/^([0-9]{1,3}(\.[0-9]{1,3}){3}|[0-9a-fA-F:]+)$/.test(nic.dns[d])) {
+            return 'Interface ' + i + ': invalid DNS server "' + nic.dns[d] + '".';
+          }
+        }
       }
     }
 

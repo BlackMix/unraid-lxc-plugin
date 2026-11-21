@@ -649,7 +649,8 @@ $(function() {
         ipv4Gateway: this.contIpv4Gateway.value,
         ipv6Mode: this.contIpv6Mode.value,
         ipv6Address: this.contIpv6Address.value,
-        ipv6Gateway: this.contIpv6Gateway.value
+        ipv6Gateway: this.contIpv6Gateway.value,
+        dns: this.contDns ? this.contDns.value.split(/[\s,;]+/).filter(Boolean) : []
       };
     }
 

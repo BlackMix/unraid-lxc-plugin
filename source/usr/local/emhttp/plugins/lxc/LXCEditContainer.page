@@ -58,6 +58,7 @@ $nicsJson = json_encode(array_map(static function (NetworkInterface $nic): array
         'hwaddr' => $nic->hwaddr,
         'macvlanMode' => $nic->macvlanMode,
         'vethMode' => $nic->vethMode,
+        'dns' => $nic->dns,
         'vlanId' => $nic->vlanId,
         'ipv4Mode' => $nic->ipv4Mode,
         'ipv4Address' => $nic->ipv4Address,
