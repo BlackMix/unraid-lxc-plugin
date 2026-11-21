@@ -29,8 +29,15 @@ file_put_contents($base . '/data/ct1/config', implode("\n", [
     '#container_description=Demo container',
 ]) . "\n");
 
-$var = ['fsState' => 'Started'];
+$var = ['fsState' => 'Started', 'csrf_token' => 'test-page-csrf-token'];
 $display = ['theme' => 'white'];
+
+// csrf.php reads var.ini first (same source ajax.php validates against).
+$varIni = '/var/local/emhttp/var.ini';
+@mkdir('/var/local/emhttp', 0755, true);
+$hadVarIni = file_exists($varIni);
+$oldVarIni = $hadVarIni ? file_get_contents($varIni) : null;
+file_put_contents($varIni, "csrf_token=\"test-page-csrf-token\"\n");
 
 // Fake LXC binaries so the list pages have something to render.
 $fakeBin = sys_get_temp_dir() . '/lxcv2-bin';
@@ -119,6 +126,62 @@ function check(string $label, bool $condition, string $extra = ''): void
     }
 }
 
+/**
+ * Structurally locate the <script> element containing the CSRF token and report
+ * whether it is nested inside another <script> element. Tracks open/close depth
+ * instead of relying on raw substring positions around the token.
+ */
+function csrfScriptIsNested(string $html): ?bool
+{
+    $html = preg_replace('/<!--.*?-->/s', '', $html) ?? $html;
+    $tokenPos = strpos($html, 'LXCV2_CSRF');
+    if ($tokenPos === false) {
+        return null;
+    }
+    $before = substr($html, 0, $tokenPos);
+    $lastOpen = strrpos($before, '<script');
+    if ($lastOpen === false) {
+        return null;
+    }
+    $beforeLastOpen = substr($before, 0, $lastOpen);
+    return substr_count($beforeLastOpen, '<script') > substr_count($beforeLastOpen, '</script>');
+}
+
+// Every page that loads lxc.js must publish the CSRF token before it, otherwise
+// the ajaxPrefilter bails out and ajax.php rejects every POST (e.g. container
+// creation) with "Invalid CSRF token".
+$csrfPages = [];
+foreach (glob($pluginDir . '/*.page') ?: [] as $pageFile) {
+    if (strpos((string) file_get_contents($pageFile), 'lxc.js') === false) {
+        continue;
+    }
+    $csrfPages[] = basename($pageFile);
+}
+$expectedCsrfPages = [
+    'LXC.page', 'LXCAddContainer.page', 'LXCAddTemplate.page',
+    'LXCCopyContainer.page', 'LXCDashboard.page', 'LXCRestoreBackup.page',
+    'LXCRestoreSnapshot.page', 'LXCSettingsMain.page', 'LXCSnapshots.page',
+];
+sort($csrfPages);
+sort($expectedCsrfPages);
+check('all lxc.js pages are known', $csrfPages === $expectedCsrfPages, implode(', ', $csrfPages));
+foreach ($expectedCsrfPages as $page) {
+    $file = $pluginDir . '/' . $page;
+    check("$page exists and loads lxc.js", is_file($file) && strpos((string) file_get_contents($file), 'lxc.js') !== false);
+}
+
+// Scanner fixtures: a flat script must pass, a nested one must fail.
+check('scanner accepts flat CSRF script', csrfScriptIsNested('<script>window.LXCV2_CSRF = "x";</script>') === false);
+check('scanner rejects nested CSRF script', csrfScriptIsNested('<script><script>window.LXCV2_CSRF = "x";</script></script>') === true);
+check('scanner ignores script tags in HTML comments', csrfScriptIsNested('<!-- <script> --><script>window.LXCV2_CSRF = "x";</script>') === false);
+
+foreach ($csrfPages as $page) {
+    $source = (string) file_get_contents($pluginDir . '/' . $page);
+    $includePos = strpos($source, 'include/csrf.php');
+    $scriptPos = strpos($source, 'lxc.js');
+    check("$page includes csrf.php before lxc.js", $includePos !== false && $scriptPos !== false && $includePos < $scriptPos);
+}
+
 $pages = [
     'LXCEditContainer.page' => ['name' => 'ct1'],
     'LXCAddContainer.page' => [],
@@ -138,6 +201,14 @@ foreach ($pages as $page => $query) {
         }
         check('renders without PHP errors', $errors === [], implode(', ', $errors));
         check('produces output', strlen(trim($output)) > 0);
+
+        if (in_array($page, $csrfPages, true)) {
+            check('publishes CSRF token', strpos($output, 'window.LXCV2_CSRF = "test-page-csrf-token"') !== false);
+            check('exactly one CSRF token emission', substr_count($output, 'window.LXCV2_CSRF') === 1);
+            check('CSRF script is not nested in another script', csrfScriptIsNested($output) === false);
+            preg_match_all('/<script[^>]*src=["\'][^"\']*lxc\.js[^"\']*["\'][^>]*>/i', $output, $scriptTags);
+            check('loads lxc.js exactly once', count($scriptTags[0]) === 1);
+        }
 
         if ($page === 'LXCEditContainer.page') {
             check('shows container name', strpos($output, 'ct1') !== false);
@@ -172,6 +243,7 @@ foreach ($pages as $page => $query) {
         }
 
         if ($page === 'LXCAddContainer.page') {
+            check('loads lxc.js even without an image list', strpos($output, '/plugins/lxc/js/lxc.js') !== false);
             check('has network type field', strpos($output, 'contNetType') !== false);
             check('has vlan field', strpos($output, 'contNetVlan') !== false);
             check('has ipv6 field', strpos($output, 'contIpv6Mode') !== false);
@@ -180,6 +252,12 @@ foreach ($pages as $page => $query) {
         $failures++;
         echo '  FAIL exception -> ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine() . "\n";
     }
+}
+
+if ($hadVarIni) {
+    file_put_contents($varIni, (string) $oldVarIni);
+} else {
+    @unlink($varIni);
 }
 
 echo "\n" . ($failures === 0 ? 'ALL PAGES RENDER' : "$failures CHECK(S) FAILED") . "\n";

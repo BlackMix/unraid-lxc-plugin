@@ -17,6 +17,7 @@ $date = $_GET['date'];
   let snapshot = '<?= $snapshot ?>';
 </script>
 <link rel="stylesheet" href="/plugins/lxc/css/lxc.css">
+<?php require '/usr/local/emhttp/plugins/lxc/include/csrf.php' ?>
 <script src="/plugins/lxc/js/lxc.js"></script>
 
 <div id="canvas">

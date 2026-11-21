@@ -173,4 +173,5 @@ $lxc = simplexml_load_file("/tmp/lxc_container_template.xml");
   </form>
 </div>
 
+<?php require '/usr/local/emhttp/plugins/lxc/include/csrf.php' ?>
 <script src="<? autov('/plugins/lxc/js/lxc.js') ?>"></script>

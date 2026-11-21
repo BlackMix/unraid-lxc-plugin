@@ -3,6 +3,8 @@ Markdown="false"
 ---
 <link rel="stylesheet" href="/plugins/lxc/css/lxc.css">
 <script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
+<?php require '/usr/local/emhttp/plugins/lxc/include/csrf.php' ?>
+<script src="<?autov('/plugins/lxc/js/lxc.js')?>"></script>
 
 
 <?php
@@ -92,7 +94,6 @@ $avail_images_json = json_encode($avail_images);
       </dl>
     </div>
 
-    <script src="<?autov('/plugins/lxc/js/lxc.js')?>"></script>
     <script>
       var avail_images = <?= $avail_images_json ?>;
       var distributionSelect = document.getElementById("distribution-select");

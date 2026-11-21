@@ -8,6 +8,7 @@ require_once('/usr/local/emhttp/plugins/lxc/include/Container.php');
 ?>
 
 <link rel="stylesheet" href="/plugins/lxc/css/lxc.css">
+<?php require '/usr/local/emhttp/plugins/lxc/include/csrf.php' ?>
 <script src="/plugins/lxc/js/lxc.js"></script>
 
 <?php

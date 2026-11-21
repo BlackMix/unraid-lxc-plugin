@@ -22,12 +22,12 @@ if (!file_exists('/tmp/lxc/containers')) {
 }
 file_put_contents('/tmp/lxc/containers/active', time());
 ?>
+<?php require '/usr/local/emhttp/plugins/lxc/include/csrf.php' ?>
 <script>
   const shadowbox = document.getElementById('shadowbox');
   function closeShadowbox() {
     shadowbox.style.display = 'none';
   }
-  window.LXCV2_CSRF = <?= json_encode((string) ($var['csrf_token'] ?? '')) ?>;
 </script>
 <link rel="stylesheet" href="<?autov('/plugins/lxc/css/lxc.css')?>">
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">

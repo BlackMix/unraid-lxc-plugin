@@ -139,4 +139,5 @@ function LXCLayout() {
 <link rel="stylesheet" href="/plugins/lxc/css/lxc.css">
 <link type="text/css" rel="stylesheet" href="/webGui/styles/jquery.switchbutton.css">
 <script src="/webGui/javascript/jquery.switchbutton.js"></script>
+<?php require '/usr/local/emhttp/plugins/lxc/include/csrf.php' ?>
 <script src="/plugins/lxc/js/lxc.js"></script>
