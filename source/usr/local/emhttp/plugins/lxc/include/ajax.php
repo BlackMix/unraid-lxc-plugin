@@ -477,16 +477,42 @@ if (isset($_POST['lxc'])) {
             $name = requireContainer();
             $vmid = (int) ($_POST['vmid'] ?? 0);
             $jobId = preg_replace('/[^A-Za-z0-9]/', '', (string) ($_POST['job'] ?? '')) ?: bin2hex(random_bytes(8));
-            // Run synchronously. Background workers (exec/nohup/fastcgi) are
-            // not reliable in the Unraid webGUI, so we keep the same pattern
-            // used by the legacy backup: one request, one result. Errors are
-            // returned to the UI instead of leaving a stale progress status.
-            $result = ProxmoxBackup::create($name, $vmid, $jobId);
-            lxcJson($result['ok'], implode(' ', $result['messages']), [
-                'messages' => $result['messages'],
-                'file' => $result['file'] ?? null,
-                'job' => $jobId,
-            ]);
+
+            // Prepare the staging pct.conf and launch a detached shell worker.
+            // This is the same pattern as lxc-autobackup: the webGUI request
+            // returns immediately and the heavy tar/gzip runs outside PHP.
+            $messages = [];
+            $rootfs = ProxmoxBackup::resolveRootfsPublic($name, $messages);
+            if ($rootfs === null) {
+                lxcJson(false, implode(' ', $messages));
+            }
+            $targetDir = ProxmoxBackup::dir($name);
+            if (!is_dir($targetDir)) {
+                @mkdir($targetDir, 0755, true);
+            }
+            $staging = sys_get_temp_dir() . '/lxc-px-stage-' . $name . '-' . $jobId;
+            @mkdir($staging . '/etc/vzdump', 0755, true);
+            $pctConf = $staging . '/etc/vzdump/pct.conf';
+            $pctContent = ProxmoxBackup::toPctConfig($name, $vmid, $rootfs);
+            if (@file_put_contents($pctConf, $pctContent) === false) {
+                lxcJson(false, 'Could not write pct.conf for the backup.');
+            }
+            $settings = new Settings();
+            $threads = max(1, min(16, (int) ($settings->backup_threads ?? 1)));
+            $compression = ProxmoxBackup::hasZstdPublic() ? 'zst' : 'gz';
+            if ($compression === 'gz') {
+                $threads = max(1, min(9, (int) ($settings->backup_compression ?? 6)));
+            }
+            $script = '/usr/local/emhttp/plugins/lxc/scripts/proxmox-backup-worker.sh';
+            $cmd = escapeshellarg($script) . ' ' . escapeshellarg($name) . ' ' . escapeshellarg((string) $vmid)
+                . ' ' . escapeshellarg($jobId) . ' ' . escapeshellarg($targetDir) . ' '
+                . escapeshellarg($rootfs) . ' ' . escapeshellarg($staging) . ' '
+                . escapeshellarg($pctConf) . ' ' . escapeshellarg($compression) . ' '
+                . escapeshellarg((string) $threads) . ' > /dev/null 2>&1 &';
+            @unlink(ProxmoxBackup::statusPath($jobId));
+            ProxmoxBackup::writeStatus($jobId, 'preparing', 0, time());
+            exec($cmd);
+            lxcJson(true, 'Proxmox backup started.', ['job' => $jobId, 'started' => true]);
 
         case 'getProxmoxBackupProgress':
             // Release the session lock so polling is not blocked by the

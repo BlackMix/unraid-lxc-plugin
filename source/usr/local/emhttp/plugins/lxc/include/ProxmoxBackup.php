@@ -21,6 +21,21 @@ final class ProxmoxBackup
     private const TOKEN_TTL = 300;
     private const FILE_RE = '/^vzdump-lxc-(\d+)-(\d{4}_\d{2}_\d{2}-\d{2}_\d{2}_\d{2})\.tar\.(zst|gz)$/';
 
+    /**
+     * Public wrappers used by ajax.php to prepare the background worker.
+     *
+     * @param string[] $messages
+     */
+    public static function resolveRootfsPublic(string $name, array &$messages): ?string
+    {
+        return self::resolveRootfs($name, $messages);
+    }
+
+    public static function hasZstdPublic(): bool
+    {
+        return self::hasZstd();
+    }
+
     public static function statusPath(string $jobId): string
     {
         $safe = preg_replace('/[^A-Za-z0-9]/', '', $jobId) ?: 'unknown';
