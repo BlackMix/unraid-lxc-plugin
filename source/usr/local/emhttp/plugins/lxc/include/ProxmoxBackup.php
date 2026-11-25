@@ -3,7 +3,6 @@ require_once __DIR__ . '/ContainerConfig.php';
 require_once __DIR__ . '/Network.php';
 require_once __DIR__ . '/Paths.php';
 require_once __DIR__ . '/Settings.php';
-require_once __DIR__ . '/TarWriter.php';
 
 /**
  * Proxmox-compatible LXC backups (vzdump format).
@@ -181,22 +180,28 @@ final class ProxmoxBackup
             $xattrs = self::tarSupports('--xattrs') ? '--xattrs' : '';
             $acls = self::tarSupports('--acls') ? '--acls' : '';
             // du -sb prints "<bytes>\t<path>" — parse the leading number only.
-            $totalBytes = TarWriter::totalSize($rootfs);
-            self::writeStatus($jobId, 'copying', 5, $started, $totalBytes, 0);
-
-            try {
-                $tar = new TarWriter($part);
-            } catch (Throwable $e) {
-                $messages[] = 'Could not open archive: ' . $e->getMessage();
+            // Use the same simple external tar pattern as lxc-autobackup,
+            // which is already proven on this Unraid. No staging copy, no PHP
+            // recursion, no find: just one tar of the rootfs plus pct.conf.
+            $totalBytes = 0;
+            $tarPart = $targetDir . '/' . $base . '.tar';
+            self::writeStatus($jobId, 'copying', 5, $started, 0, 0);
+            $cmd = 'cd ' . escapeshellarg($rootfs)
+                . ' && tar --exclude=./snaps --exclude=./tmp/?* --exclude=./var/run/?*pid'
+                . ' -cf ' . escapeshellarg($tarPart) . ' .'
+                . ' && tar -C ' . escapeshellarg($staging) . ' -rf ' . escapeshellarg($tarPart)
+                . ' ./etc/vzdump/pct.conf';
+            [$rcTar] = LxcPaths::run(['bash', '-c', $cmd], null, 600);
+            clearstatcache();
+            if ($rcTar !== 0 || !is_file($tarPart)) {
+                $messages[] = 'Backup archive could not be created (tar failed).';
+                @unlink($tarPart);
                 return self::failJob($jobId, $started, $messages);
             }
-            // pct.conf first, then the rootfs. All in pure PHP — no tar/find/
-            // gzip binaries, so bind mounts and device files cannot hang it.
-            $tar->addFile('./etc/vzdump/pct.conf', $pctConf);
-            $writtenAt = microtime(true);
-            self::walkRootfs($rootfs, $rootfs, $tar, $jobId, $started, $totalBytes, $writtenAt);
-            $tar->finish();
-            clearstatcache();
+            self::writeStatus($jobId, 'compressing', 90, $started, 0, 0);
+            [$rcGz] = LxcPaths::run(['bash', '-c', 'gzip -c ' . escapeshellarg($tarPart)
+                . ' > ' . escapeshellarg($part)], null, 600);
+            @unlink($tarPart);
             if (!is_file($part) || filesize($part) < 64) {
                 $messages[] = 'Backup archive could not be created (tar/compressor failed).';
                 @unlink($part);
@@ -229,45 +234,6 @@ final class ProxmoxBackup
         }
 
         return ['ok' => $ok, 'messages' => $messages, 'file' => basename($final)];
-    }
-
-    private static function walkRootfs(
-        string $root,
-        string $dir,
-        TarWriter $tar,
-        string $jobId,
-        int $started,
-        int $totalBytes,
-        float &$writtenAt
-    ): void {
-        $entries = @scandir($dir);
-        if ($entries === false) {
-            return;
-        }
-        sort($entries);
-        foreach ($entries as $entry) {
-            if ($entry === '.' || $entry === '..') {
-                continue;
-            }
-            $full = $dir . '/' . $entry;
-            if (is_link($full)) {
-                // Never follow symlinks out of the rootfs.
-                continue;
-            }
-            if (is_file($full)) {
-                $tar->addFile('./' . ltrim(substr($full, strlen($root)), '/'), $full);
-            } elseif (is_dir($full)) {
-                self::walkRootfs($root, $full, $tar, $jobId, $started, $totalBytes, $writtenAt);
-            }
-        }
-        if (microtime(true) - $writtenAt >= 0.5) {
-            $writtenAt = microtime(true);
-            $done = $totalBytes > 0 ? min($totalBytes, $tar->written()) : 0;
-            $percent = $totalBytes > 0
-                ? (int) min(85, 5 + (int) floor($done / $totalBytes * 80))
-                : 5;
-            self::writeStatus($jobId, 'archiving', $percent, $started, $totalBytes, $done);
-        }
     }
 
     /**
