@@ -193,7 +193,7 @@ final class ProxmoxBackup
             self::writeStatus($jobId, 'copying', 5, $started, $totalBytes, 0);
             $tarLog = $targetDir . '/' . $base . '.tar.log';
             $cmd = 'cd ' . escapeshellarg($rootfs)
-                . ' && tar --one-file-system --warning=no-file-changed --warning=no-file-removed'
+                . ' && tar --one-file-system'
                 . ' --exclude=./snaps --exclude=./tmp/?* --exclude=./var/run/?*pid'
                 . ' -cf ' . escapeshellarg($tarPart) . ' .'
                 . ' 2> ' . escapeshellarg($tarLog)
