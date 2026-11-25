@@ -470,6 +470,10 @@ if (isset($_POST['lxc'])) {
             ]);
 
         case 'createProxmoxBackup':
+            // Let the polling requests read progress while this job runs.
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                session_write_close();
+            }
             $name = requireContainer();
             $vmid = (int) ($_POST['vmid'] ?? 0);
             $jobId = preg_replace('/[^A-Za-z0-9]/', '', (string) ($_POST['job'] ?? '')) ?: bin2hex(random_bytes(8));
@@ -481,6 +485,11 @@ if (isset($_POST['lxc'])) {
             ]);
 
         case 'getProxmoxBackupProgress':
+            // Release the session lock so polling is not blocked by the
+            // long-running backup request that holds the same session.
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                session_write_close();
+            }
             $jobId = preg_replace('/[^A-Za-z0-9]/', '', (string) ($_POST['job'] ?? ''));
             $status = ProxmoxBackup::readStatus($jobId);
             if ($status === null) {

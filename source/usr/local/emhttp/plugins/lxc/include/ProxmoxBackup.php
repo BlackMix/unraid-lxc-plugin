@@ -64,6 +64,17 @@ final class ProxmoxBackup
         return is_array($data) ? $data : null;
     }
 
+    /**
+     * @param string[] $messages
+     * @return array{ok:bool,messages:string[]}
+     */
+    private static function failJob(string $jobId, int $started, array $messages): array
+    {
+        self::writeStatus($jobId, 'error', 100, $started, 0, 0, ['error' => implode(' ', $messages)]);
+
+        return ['ok' => false, 'messages' => $messages];
+    }
+
     public static function clearStatus(string $jobId): void
     {
         if ($jobId !== '' && preg_match('/^[A-Za-z0-9]+$/', $jobId) === 1) {
@@ -80,34 +91,35 @@ final class ProxmoxBackup
         self::writeStatus($jobId, 'preparing', 0, $started);
         $messages = [];
         if (!LxcPaths::isValidContainerName($name)) {
-            return ['ok' => false, 'messages' => ['Invalid container name.']];
+            return self::failJob($jobId, $started, ['Invalid container name.']);
         }
         if ($vmid < 100 || $vmid > 999999999) {
-            return ['ok' => false, 'messages' => ['VMID must be between 100 and 999999999.']];
+            return self::failJob($jobId, $started, ['VMID must be between 100 and 999999999.']);
         }
+        $settings = new Settings();
         $backupPath = self::backupPath();
 
         $config = new ContainerConfig($name);
         if (!$config->exists()) {
-            return ['ok' => false, 'messages' => ['Container configuration not found.']];
+            return self::failJob($jobId, $started, ['Container configuration not found.']);
         }
         $nics = Network::read($config);
         foreach ($nics as $nic) {
             if ($nic->type === 'macvlan' || $nic->vethMode === 'router') {
-                return ['ok' => false, 'messages' => [
+                return self::failJob($jobId, $started, [
                     'Proxmox backup is not supported for macvlan or veth router mode interfaces (interface ' . $nic->name . ').',
-                ]];
+                ]);
             }
         }
 
         $rootfs = self::resolveRootfs($name, $messages);
         if ($rootfs === null) {
-            return ['ok' => false, 'messages' => $messages];
+            return self::failJob($jobId, $started, $messages);
         }
 
         $targetDir = self::dir($name);
         if (!self::ensureDir($targetDir, $messages)) {
-            return ['ok' => false, 'messages' => $messages];
+            return self::failJob($jobId, $started, $messages);
         }
 
         $stamp = gmdate('Y_m_d-H_i_s');
@@ -123,12 +135,13 @@ final class ProxmoxBackup
 
         try {
             if ($wasRunning) {
+                self::writeStatus($jobId, 'stopping', 2, $started, 0, 0);
                 $timeout = (int) ($settings->timeout ?? 15);
                 [, , $err] = LxcPaths::run(['lxc-stop', '--timeout=' . max(1, $timeout), '-n', $name]);
                 if ((int) LxcPaths::capture(['lxc-info', '-n', $name, '-sH']) !== 0
                     && trim((string) LxcPaths::capture(['lxc-info', '-n', $name, '-sH'])) !== 'STOPPED') {
                     $messages[] = 'Could not stop the container; no backup was created.' . ($err !== '' ? ' ' . trim($err) : '');
-                    return ['ok' => false, 'messages' => $messages];
+                    return self::failJob($jobId, $started, $messages);
                 }
                 $stopped = true;
                 $messages[] = 'Container stopped for a consistent backup; it will be restarted.';
@@ -139,17 +152,17 @@ final class ProxmoxBackup
             }
             if (!@mkdir($staging, 0700, true)) {
                 $messages[] = 'Could not create staging directory.';
-                return ['ok' => false, 'messages' => $messages];
+                return self::failJob($jobId, $started, $messages);
             }
 
             // Copy the rootfs FIRST so the generated pct.conf always wins.
             $copied = self::copyRootfs($rootfs, $staging, $messages);
             if (!$copied) {
-                return ['ok' => false, 'messages' => $messages];
+                return self::failJob($jobId, $started, $messages);
             }
             $pctConf = $staging . '/etc/vzdump/pct.conf';
             if (!self::writeFile($pctConf, self::toPctConfig($name, $vmid, $rootfs), $messages, 'pct.conf')) {
-                return ['ok' => false, 'messages' => $messages];
+                return self::failJob($jobId, $started, $messages);
             }
 
             $threads = max(1, min(16, (int) ($settings->backup_threads ?? 1)));
@@ -193,7 +206,7 @@ final class ProxmoxBackup
             if (!is_file($tarPart)) {
                 $messages[] = 'Backup archive could not be created (tar failed).';
                 @unlink($tarPart);
-                return ['ok' => false, 'messages' => $messages];
+                return self::failJob($jobId, $started, $messages);
             }
             self::writeStatus($jobId, 'compressing', 90, $started, $totalBytes, $totalBytes);
             if ($compression === 'zst') {
@@ -209,12 +222,12 @@ final class ProxmoxBackup
             if (!is_file($part) || filesize($part) < 64) {
                 $messages[] = 'Backup archive could not be created (tar/compressor failed).';
                 @unlink($part);
-                return ['ok' => false, 'messages' => $messages];
+                return self::failJob($jobId, $started, $messages);
             }
             if (!@rename($part, $final)) {
                 $messages[] = 'Could not install the final backup file.';
                 @unlink($part);
-                return ['ok' => false, 'messages' => $messages];
+                return self::failJob($jobId, $started, $messages);
             }
 
             self::retention($name, (int) ($settings->backup_keep ?? 0));

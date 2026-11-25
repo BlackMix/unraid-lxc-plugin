@@ -866,9 +866,15 @@ $(function() {
           $('#px_bar').css('width', pct + '%');
           let elapsed = Math.max(1, Math.floor(Date.now() / 1000) - parseInt(s.started || Date.now() / 1000, 10));
           let eta = pct > 0 && pct < 100 ? elapsed / pct * (100 - pct) : 0;
+          if (s.stage === 'error') {
+            window.clearInterval(poll);
+            $('#px_status').text('Failed - ' + (s.error || s.message || 'see message below')).css('color', 'red');
+            return;
+          }
           let stage = s.stage === 'archiving' ? 'Archiving files'
             : s.stage === 'compressing' ? 'Compressing'
             : s.stage === 'copying' ? 'Copying rootfs'
+            : s.stage === 'stopping' ? 'Stopping container'
             : s.stage === 'done' ? 'Done' : 'Preparing';
           $('#px_status').text(stage + ' - ' + pct + '%' + (pct > 0 && pct < 100 ? ' - ETA ' + pxFormatEta(eta) : ''));
         });
