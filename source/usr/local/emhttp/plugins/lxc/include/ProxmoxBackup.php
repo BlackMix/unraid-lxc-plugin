@@ -21,11 +21,63 @@ final class ProxmoxBackup
     private const TOKEN_TTL = 300;
     private const FILE_RE = '/^vzdump-lxc-(\d+)-(\d{4}_\d{2}_\d{2}-\d{2}_\d{2}_\d{2})\.tar\.(zst|gz)$/';
 
+    public static function statusPath(string $jobId): string
+    {
+        $safe = preg_replace('/[^A-Za-z0-9]/', '', $jobId) ?: 'unknown';
+
+        return sys_get_temp_dir() . '/lxc-proxmox-' . $safe . '.json';
+    }
+
+    /**
+     * @param array<string,mixed> $extra
+     */
+    public static function writeStatus(string $jobId, string $stage, int $percent, int $started, int $total = 0, int $done = 0, array $extra = []): void
+    {
+        if ($jobId === '') {
+            return;
+        }
+        $data = array_merge([
+            'stage' => $stage,
+            'percent' => max(0, min(100, $percent)),
+            'started' => $started,
+            'total' => $total,
+            'done' => $done,
+            'updated' => time(),
+        ], $extra);
+        @file_put_contents(self::statusPath($jobId), json_encode($data));
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    public static function readStatus(string $jobId): ?array
+    {
+        if ($jobId === '' || preg_match('/^[A-Za-z0-9]+$/', $jobId) !== 1) {
+            return null;
+        }
+        $path = self::statusPath($jobId);
+        if (!is_file($path)) {
+            return null;
+        }
+        $data = json_decode((string) file_get_contents($path), true);
+
+        return is_array($data) ? $data : null;
+    }
+
+    public static function clearStatus(string $jobId): void
+    {
+        if ($jobId !== '' && preg_match('/^[A-Za-z0-9]+$/', $jobId) === 1) {
+            @unlink(self::statusPath($jobId));
+        }
+    }
+
     /**
      * @return array{ok:bool,messages:string[],file?:string}
      */
-    public static function create(string $name, int $vmid): array
+    public static function create(string $name, int $vmid, string $jobId = ''): array
     {
+        $started = time();
+        self::writeStatus($jobId, 'preparing', 0, $started);
         $messages = [];
         if (!LxcPaths::isValidContainerName($name)) {
             return ['ok' => false, 'messages' => ['Invalid container name.']];
@@ -105,16 +157,54 @@ final class ProxmoxBackup
             $owner = self::tarSupports('--numeric-owner') ? '--numeric-owner' : '';
             $xattrs = self::tarSupports('--xattrs') ? '--xattrs' : '';
             $acls = self::tarSupports('--acls') ? '--acls' : '';
-            $cmd = 'set -o pipefail; tar -C ' . escapeshellarg($staging) . ' ' . $exclude . ' '
-                . $owner . ' ' . $xattrs . ' ' . $acls . ' -cf - . | ';
-            if ($compression === 'zst') {
-                $cmd .= 'zstd -q -T' . $threads . ' -o ' . escapeshellarg($part);
+            [$rcDu, $duOut] = LxcPaths::run(['du', '-sb', $staging]);
+            $totalBytes = ($rcDu === 0 && is_numeric(trim($duOut))) ? (int) trim($duOut) : 0;
+            $tarPart = $targetDir . '/' . $base . '.tar.part';
+            self::writeStatus($jobId, 'copying', 5, $started, $totalBytes, 0);
+
+            $cmd = 'tar -C ' . escapeshellarg($staging) . ' ' . $exclude . ' '
+                . $owner . ' ' . $xattrs . ' ' . $acls . ' -cf ' . escapeshellarg($tarPart) . ' . 2>/dev/null';
+            $process = @proc_open($cmd, [
+                0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w'],
+            ], $pipes);
+            if (is_resource($process)) {
+                foreach ([0, 1, 2] as $n) {
+                    if (isset($pipes[$n])) {
+                        fclose($pipes[$n]);
+                    }
+                }
+                while (true) {
+                    $state = proc_get_status($process);
+                    if (!$state['running']) {
+                        break;
+                    }
+                    $done = is_file($tarPart) ? (int) filesize($tarPart) : 0;
+                    $percent = $totalBytes > 0
+                        ? (int) min(85, 5 + (int) floor($done / $totalBytes * 80))
+                        : 5;
+                    self::writeStatus($jobId, 'archiving', $percent, $started, $totalBytes, $done);
+                    usleep(400000);
+                }
+                proc_close($process);
             } else {
-                $cmd .= 'gzip -' . $threads . ' -c > ' . escapeshellarg($part);
+                LxcPaths::run(['bash', '-c', $cmd]);
             }
-            LxcPaths::run(['bash', '-c', $cmd]);
-            // LxcPaths::run cannot propagate pipefail through bash -c reliably;
-            // verify the artifact instead.
+            clearstatcache();
+            if (!is_file($tarPart)) {
+                $messages[] = 'Backup archive could not be created (tar failed).';
+                @unlink($tarPart);
+                return ['ok' => false, 'messages' => $messages];
+            }
+            self::writeStatus($jobId, 'compressing', 90, $started, $totalBytes, $totalBytes);
+            if ($compression === 'zst') {
+                $cmd2 = 'zstd -q -T' . $threads . ' -o ' . escapeshellarg($part)
+                    . ' ' . escapeshellarg($tarPart) . ' 2>/dev/null';
+            } else {
+                $cmd2 = 'gzip -' . $threads . ' -c ' . escapeshellarg($tarPart)
+                    . ' > ' . escapeshellarg($part) . ' 2>/dev/null';
+            }
+            LxcPaths::run(['bash', '-c', $cmd2]);
+            @unlink($tarPart);
             clearstatcache();
             if (!is_file($part) || filesize($part) < 64) {
                 $messages[] = 'Backup archive could not be created (tar/compressor failed).';
@@ -133,8 +223,14 @@ final class ProxmoxBackup
                 $messages[] = 'zstd was not available; gzip fallback was used.';
             }
             $messages[] = 'EXPERIMENTAL: validate with `pct restore <vmid> ' . basename($final) . ' --rootfs <storage>:<size>` on Proxmox.';
+            self::writeStatus($jobId, 'done', 100, $started, $totalBytes, $totalBytes, ['file' => basename($final)]);
             $ok = true;
         } finally {
+            if (!$ok) {
+                self::writeStatus($jobId, 'error', 100, $started, $totalBytes ?? 0, 0, [
+                    'error' => implode(' ', $messages),
+                ]);
+            }
             if (is_dir($staging)) {
                 self::removeTree($staging);
             }

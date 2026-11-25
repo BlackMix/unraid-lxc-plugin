@@ -472,11 +472,21 @@ if (isset($_POST['lxc'])) {
         case 'createProxmoxBackup':
             $name = requireContainer();
             $vmid = (int) ($_POST['vmid'] ?? 0);
-            $result = ProxmoxBackup::create($name, $vmid);
+            $jobId = preg_replace('/[^A-Za-z0-9]/', '', (string) ($_POST['job'] ?? '')) ?: bin2hex(random_bytes(8));
+            $result = ProxmoxBackup::create($name, $vmid, $jobId);
             lxcJson($result['ok'], implode(' ', $result['messages']), [
                 'messages' => $result['messages'],
                 'file' => $result['file'] ?? null,
+                'job' => $jobId,
             ]);
+
+        case 'getProxmoxBackupProgress':
+            $jobId = preg_replace('/[^A-Za-z0-9]/', '', (string) ($_POST['job'] ?? ''));
+            $status = ProxmoxBackup::readStatus($jobId);
+            if ($status === null) {
+                lxcJson(false, 'Unknown backup job.');
+            }
+            lxcJson(true, 'ok', ['status' => $status]);
 
         case 'deleteProxmoxBackup':
             $name = requireContainer();

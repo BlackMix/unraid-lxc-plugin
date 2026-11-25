@@ -153,6 +153,19 @@ check('create with existing pct.conf succeeded', $result['ok'] === true, implode
 check('guest rootfs pct.conf untouched', file_get_contents($guestPct) === "GUEST-CONFIG\n");
 @unlink($guestPct);
 
+echo "\nProgress reporting\n";
+$jobId = 'px' . bin2hex(random_bytes(4));
+ProxmoxBackup::writeStatus($jobId, 'archiving', 42, time() - 10, 1000, 420);
+$status = ProxmoxBackup::readStatus($jobId);
+check('status readable', is_array($status) && $status['stage'] === 'archiving' && $status['percent'] === 42, json_encode($status));
+check('invalid job rejected', ProxmoxBackup::readStatus('../etc/passwd') === null);
+$result = ProxmoxBackup::create('px1', 123, $jobId);
+$status = ProxmoxBackup::readStatus($jobId);
+check('create with job succeeded', $result['ok'] === true, implode(' ', $result['messages']));
+check('final status is done', is_array($status) && $status['stage'] === 'done' && $status['percent'] === 100, json_encode($status));
+ProxmoxBackup::clearStatus($jobId);
+check('status cleared', ProxmoxBackup::readStatus($jobId) === null);
+
 echo "\nGlobal VMID setting\n";
 require_once $include . '/Settings.php';
 $settings = new Settings();

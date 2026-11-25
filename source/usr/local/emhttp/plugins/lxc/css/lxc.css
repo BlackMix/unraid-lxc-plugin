@@ -926,3 +926,19 @@ h3.startArray, h2.noContainers {
 .lxcv2-stat-value[title] {
   cursor: help;
 }
+
+.px-progress {
+  width: 100%;
+  height: 18px;
+  background: var(--mild-background-color, #e5e5e5);
+  border: 1px solid var(--border-color, #ccc);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 10px 0 6px 0;
+}
+.px-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--lxcv2-good, #4caf50);
+  transition: width 0.4s ease;
+}

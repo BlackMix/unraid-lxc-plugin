@@ -829,9 +829,18 @@ $(function() {
   });
 
   // Listener for add container from CA App
+  function pxFormatEta(seconds) {
+    if (!isFinite(seconds) || seconds < 0) return '--:--';
+    seconds = Math.ceil(seconds);
+    let m = Math.floor(seconds / 60);
+    let s = seconds % 60;
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  }
+
   $(document).on('click', '.createProxmoxBackup', function () {
     let container = $(this).attr('data-container');
     let vmid = $('#px_vmid_' + container).val();
+    let job = 'px' + Date.now() + Math.floor(Math.random() * 100000);
     Shadowbox.open({
       content: '<div id="dialogContent" class="logLine spacing"></div>',
       player: 'html',
@@ -841,18 +850,45 @@ $(function() {
     });
     waitForElement('#dialogContent', function () {
       let dialogContent = $('#dialogContent');
-      dialogContent.append('<p>Creating Proxmox backup for ' + container + ' (container will be stopped and restarted)...</p>');
+      dialogContent.html(
+        '<p>Creating Proxmox backup for ' + container + ' (container will be stopped and restarted)...</p>' +
+        '<div class="px-progress"><div class="px-progress-bar" id="px_bar"></div></div>' +
+        '<p id="px_status">Preparing...</p>'
+      );
+      let poll = window.setInterval(function () {
+        $.post('/plugins/lxc/include/ajax.php', {
+          'lxc': '', 'action': 'getProxmoxBackupProgress', 'job': job
+        }, function (data) {
+          let result = lxcParseResponse(data);
+          if (!result.ok || !data.status) return;
+          let s = data.status;
+          let pct = parseInt(s.percent || 0, 10);
+          $('#px_bar').css('width', pct + '%');
+          let elapsed = Math.max(1, Math.floor(Date.now() / 1000) - parseInt(s.started || Date.now() / 1000, 10));
+          let eta = pct > 0 && pct < 100 ? elapsed / pct * (100 - pct) : 0;
+          let stage = s.stage === 'archiving' ? 'Archiving files'
+            : s.stage === 'compressing' ? 'Compressing'
+            : s.stage === 'copying' ? 'Copying rootfs'
+            : s.stage === 'done' ? 'Done' : 'Preparing';
+          $('#px_status').text(stage + ' - ' + pct + '%' + (pct > 0 && pct < 100 ? ' - ETA ' + pxFormatEta(eta) : ''));
+        });
+      }, 1000);
+
       $.ajax({
         type: 'POST',
         url: '/plugins/lxc/include/ajax.php',
-        data: { 'lxc': '', 'action': 'createProxmoxBackup', 'container': container, 'vmid': vmid },
+        data: { 'lxc': '', 'action': 'createProxmoxBackup', 'container': container, 'vmid': vmid, 'job': job },
         success: function (data) {
+          window.clearInterval(poll);
           let result = lxcParseResponse(data);
           let colour = result.ok ? 'green' : 'red';
+          $('#px_bar').css('width', '100%');
+          $('#px_status').text(result.ok ? 'Done - 100%' : 'Failed');
           dialogContent.append('<p style="color:' + colour + ';">' + $('<div>').text(result.message).html() + '</p>');
           dialogContent.append('<p class="centered"><button class="logLine" type="button" onclick="top.Shadowbox.close(); location.reload();">Done</button></p>');
         },
         error: function (xhr) {
+          window.clearInterval(poll);
           dialogContent.append('<p style="color:red;">Request failed (HTTP ' + xhr.status + ')</p>');
           dialogContent.append('<p class="centered"><button class="logLine" type="button" onclick="top.Shadowbox.close(); location.reload();">Done</button></p>');
         }
