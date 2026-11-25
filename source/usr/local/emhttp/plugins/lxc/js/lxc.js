@@ -867,7 +867,13 @@ $(function() {
           let pct = parseInt(s.percent || 0, 10);
           $('#px_bar').css('width', pct + '%');
           $('#px_status').text(pxStageLabel(s.stage) + ' - ' + pct + '%' + (s.error ? ' - ' + s.error : ''));
-          if (s.stage === 'error' || s.stage === 'done') window.clearInterval(poll);
+          if (s.stage === 'error' || s.stage === 'done') {
+            window.clearInterval(poll);
+            pxBackupRunning = false;
+            $('#px_status').css('color', s.stage === 'error' ? 'red' : 'green');
+            if (s.stage === 'done') $('#px_bar').css('width', '100%');
+            dialogContent.append('<p class="centered"><button class="logLine" type="button" onclick="top.Shadowbox.close();">Done</button></p>');
+          }
         });
       }, 1000);
 
@@ -876,13 +882,15 @@ $(function() {
         url: '/plugins/lxc/include/ajax.php',
         data: { 'lxc': '', 'action': 'createProxmoxBackup', 'container': container, 'vmid': vmid, 'job': job },
         success: function (data) {
-          window.clearInterval(poll);
           let result = lxcParseResponse(data);
-          let colour = result.ok ? 'green' : 'red';
-          $('#px_bar').css('width', '100%');
-          $('#px_status').text(result.ok ? 'Done - 100%' : 'Failed');
-          dialogContent.append('<p style="color:' + colour + ';">' + $('<div>').text(result.message).html() + '</p>');
-          dialogContent.append('<p class="centered"><button class="logLine" type="button" onclick="top.Shadowbox.close(); location.reload();">Done</button></p>');
+          if (!result.ok) {
+            window.clearInterval(poll);
+            pxBackupRunning = false;
+            $('#px_status').text('Failed - ' + result.message).css('color', 'red');
+            dialogContent.append('<p class="centered"><button class="logLine" type="button" onclick="top.Shadowbox.close();">Done</button></p>');
+          }
+          // On success the POST only says "started". Progress polling keeps
+          // running until the status JSON reports done/error.
         },
         error: function (xhr) {
           window.clearInterval(poll);
