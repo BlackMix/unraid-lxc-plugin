@@ -183,11 +183,17 @@ final class ProxmoxBackup
             // Use the same simple external tar pattern as lxc-autobackup,
             // which is already proven on this Unraid. No staging copy, no PHP
             // recursion, no find: just one tar of the rootfs plus pct.conf.
-            $totalBytes = 0;
+            // Expected size of the rootfs (without crossing mounts). Used to
+            // detect a truncated archive instead of reporting a false success.
+            [$rcDu, $duOut] = LxcPaths::run(['du', '-sb', '-x', $rootfs], null, 60);
+            $totalBytes = ($rcDu === 0 && preg_match('/^(\d+)/', trim($duOut), $duMatch) === 1)
+                ? (int) $duMatch[1]
+                : 0;
             $tarPart = $targetDir . '/' . $base . '.tar';
-            self::writeStatus($jobId, 'copying', 5, $started, 0, 0);
+            self::writeStatus($jobId, 'copying', 5, $started, $totalBytes, 0);
             $cmd = 'cd ' . escapeshellarg($rootfs)
-                . ' && tar --exclude=./snaps --exclude=./tmp/?* --exclude=./var/run/?*pid'
+                . ' && tar --one-file-system --warning=no-file-changed --warning=no-file-removed'
+                . ' --exclude=./snaps --exclude=./tmp/?* --exclude=./var/run/?*pid'
                 . ' -cf ' . escapeshellarg($tarPart) . ' .'
                 . ' && tar -C ' . escapeshellarg($staging) . ' -rf ' . escapeshellarg($tarPart)
                 . ' ./etc/vzdump/pct.conf';
@@ -195,6 +201,14 @@ final class ProxmoxBackup
             clearstatcache();
             if ($rcTar !== 0 || !is_file($tarPart)) {
                 $messages[] = 'Backup archive could not be created (tar failed).';
+                @unlink($tarPart);
+                return self::failJob($jobId, $started, $messages);
+            }
+            $tarSize = (int) filesize($tarPart);
+            if ($totalBytes > 0 && $tarSize < ($totalBytes * 0.5)) {
+                $messages[] = 'Backup is incomplete: rootfs has ' . round($totalBytes / 1048576)
+                    . ' MiB but the archive has only ' . round($tarSize / 1048576)
+                    . ' MiB. The container may have a bind mount or a file that tar could not read. No backup was kept.';
                 @unlink($tarPart);
                 return self::failJob($jobId, $started, $messages);
             }
