@@ -25,7 +25,9 @@ final class ProxmoxBackup
     {
         $safe = preg_replace('/[^A-Za-z0-9]/', '', $jobId) ?: 'unknown';
 
-        return sys_get_temp_dir() . '/lxc-proxmox-' . $safe . '.json';
+        // Under the web root so the browser can poll the JSON file directly,
+        // with no PHP session lock and no second request to the worker.
+        return dirname(__DIR__) . '/status/lxc-proxmox-' . $safe . '.json';
     }
 
     /**
@@ -36,6 +38,11 @@ final class ProxmoxBackup
         if ($jobId === '') {
             return;
         }
+        $path = self::statusPath($jobId);
+        $dir = dirname($path);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
         $data = array_merge([
             'stage' => $stage,
             'percent' => max(0, min(100, $percent)),
@@ -44,7 +51,7 @@ final class ProxmoxBackup
             'done' => $done,
             'updated' => time(),
         ], $extra);
-        @file_put_contents(self::statusPath($jobId), json_encode($data));
+        @file_put_contents($path, json_encode($data));
     }
 
     /**
@@ -112,10 +119,12 @@ final class ProxmoxBackup
             }
         }
 
+        self::writeStatus($jobId, 'validating', 1, $started, 0, 0);
         $rootfs = self::resolveRootfs($name, $messages);
         if ($rootfs === null) {
             return self::failJob($jobId, $started, $messages);
         }
+        self::writeStatus($jobId, 'staging', 3, $started, 0, 0);
 
         $targetDir = self::dir($name);
         if (!self::ensureDir($targetDir, $messages)) {
@@ -157,6 +166,7 @@ final class ProxmoxBackup
 
             // Copy the rootfs FIRST so the generated pct.conf always wins.
             $copied = self::copyRootfs($rootfs, $staging, $messages);
+            self::writeStatus($jobId, 'staged', 4, $started, 0, 0);
             if (!$copied) {
                 return self::failJob($jobId, $started, $messages);
             }

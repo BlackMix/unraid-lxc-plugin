@@ -829,9 +829,18 @@ $(function() {
   });
 
   // Listener for add container from CA App
+  function pxStageLabel(stage) {
+    return {
+      preparing: 'Preparing', validating: 'Validating container', stopping: 'Stopping container',
+      staging: 'Copying rootfs', staged: 'Rootfs ready', copying: 'Copying rootfs',
+      archiving: 'Archiving files', compressing: 'Compressing', done: 'Done', error: 'Failed'
+    }[stage] || 'Working';
+  }
+
   $(document).on('click', '.createProxmoxBackup', function () {
     let container = $(this).attr('data-container');
     let vmid = $('#px_vmid_' + container).val();
+    let job = 'px' + Date.now() + Math.floor(Math.random() * 100000);
     Shadowbox.open({
       content: '<div id="dialogContent" class="logLine spacing"></div>',
       player: 'html',
@@ -844,19 +853,35 @@ $(function() {
       let dialogContent = $('#dialogContent');
       dialogContent.html(
         '<p>Creating Proxmox backup for ' + container + ' (container will be stopped and restarted)...</p>' +
-        '<p>Please wait until the DONE button is displayed.</p>'
+        '<div class="px-progress"><div class="px-progress-bar" id="px_bar"></div></div>' +
+        '<p id="px_status">Preparing...</p>'
       );
+      // Poll the JSON file directly — no PHP, no session lock.
+      let poll = window.setInterval(function () {
+        $.getJSON('/plugins/lxc/status/lxc-proxmox-' + job + '.json?_=' + Date.now(), function (s) {
+          if (!s) return;
+          let pct = parseInt(s.percent || 0, 10);
+          $('#px_bar').css('width', pct + '%');
+          $('#px_status').text(pxStageLabel(s.stage) + ' - ' + pct + '%' + (s.error ? ' - ' + s.error : ''));
+          if (s.stage === 'error' || s.stage === 'done') window.clearInterval(poll);
+        });
+      }, 1000);
+
       $.ajax({
         type: 'POST',
         url: '/plugins/lxc/include/ajax.php',
-        data: { 'lxc': '', 'action': 'createProxmoxBackup', 'container': container, 'vmid': vmid },
+        data: { 'lxc': '', 'action': 'createProxmoxBackup', 'container': container, 'vmid': vmid, 'job': job },
         success: function (data) {
+          window.clearInterval(poll);
           let result = lxcParseResponse(data);
           let colour = result.ok ? 'green' : 'red';
+          $('#px_bar').css('width', '100%');
+          $('#px_status').text(result.ok ? 'Done - 100%' : 'Failed');
           dialogContent.append('<p style="color:' + colour + ';">' + $('<div>').text(result.message).html() + '</p>');
           dialogContent.append('<p class="centered"><button class="logLine" type="button" onclick="top.Shadowbox.close(); location.reload();">Done</button></p>');
         },
         error: function (xhr) {
+          window.clearInterval(poll);
           dialogContent.append('<p style="color:red;">Request failed (HTTP ' + xhr.status + ')</p>');
           dialogContent.append('<p class="centered"><button class="logLine" type="button" onclick="top.Shadowbox.close(); location.reload();">Done</button></p>');
         }
