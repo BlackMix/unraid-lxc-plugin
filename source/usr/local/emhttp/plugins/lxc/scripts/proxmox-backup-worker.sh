@@ -39,12 +39,12 @@ if tar --acls --version >/dev/null 2>&1; then TAROPTS="$TAROPTS --acls"; fi
 
 status copying 5
 echo "rootfs size: $(du -sh "$ROOTFS" 2>/dev/null)" >> "$WORKLOG"
-# pct.conf first (vzdump expects ./etc/vzdump/pct.conf at the beginning)
-tar -C "$STAGING" $TAROPTS -cf "$TARPART" ./etc/vzdump/pct.conf 2> "$LOG" || fail "tar pct.conf: $(tail -3 "$LOG" | tr '\n' ' ')"
-echo "pct.conf tar done $(date), bytes=$(wc -c < "$TARPART" 2>/dev/null)" >> "$WORKLOG"
-cd "$ROOTFS" || fail "cannot cd rootfs"
-tar $TAROPTS --exclude=./snaps --exclude=./tmp/?* --exclude=./var/run/?*pid -rf "$TARPART" . 2>> "$LOG" || fail "tar rootfs: $(grep -v 'Error is not recoverable' "$LOG" | head -5 | tr '\n' ' ')"
-echo "rootfs tar done $(date), bytes=$(wc -c < "$TARPART" 2>/dev/null)" >> "$WORKLOG"
+# ONE tar command with two -C entries: pct.conf first (vzdump format),
+# then the rootfs. No -r/append (the Unraid tar rejects it).
+tar $TAROPTS --exclude=./snaps --exclude=./tmp/?* --exclude=./var/run/?*pid \
+  -cf "$TARPART" -C "$STAGING" ./etc/vzdump/pct.conf -C "$ROOTFS" . \
+  2> "$LOG" || fail "tar: $(grep -v 'Error is not recoverable' "$LOG" | head -5 | tr '\n' ' ')"
+echo "tar done $(date), bytes=$(wc -c < "$TARPART" 2>/dev/null)" >> "$WORKLOG"
 
 status compressing 90
 if [ "$COMP" = "zst" ]; then
