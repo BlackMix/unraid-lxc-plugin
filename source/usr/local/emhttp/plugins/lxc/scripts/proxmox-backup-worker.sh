@@ -47,8 +47,13 @@ tar $TAROPTS --exclude=./snaps --exclude=./tmp/?* --exclude=./var/run/?*pid \
 echo "tar done $(date), bytes=$(wc -c < "$TARPART" 2>/dev/null)" >> "$WORKLOG"
 
 status compressing 90
+CORES=$(nproc 2>/dev/null || echo 1)
 if [ "$COMP" = "zst" ]; then
-  zstd -q -T"$THREADS" -o "$PART" "$TARPART" >> "$LOG" 2>&1 || fail "zstd: $(tail -3 "$LOG" | tr '\n' ' ')"
+  # Use all cores when the configured value is 1 (the common default).
+  ZTHREADS="$THREADS"
+  [ "$ZTHREADS" -le 1 ] && ZTHREADS="$CORES"
+  echo "zstd threads=$ZTHREADS (cores=$CORES, configured=$THREADS)" >> "$WORKLOG"
+  zstd -q -T"$ZTHREADS" -o "$PART" "$TARPART" >> "$LOG" 2>&1 || fail "zstd: $(tail -3 "$LOG" | tr '\n' ' ')"
 else
   LEVEL=$(printf '%s' "$THREADS" | tr -cd '0-9'); [ -z "$LEVEL" ] && LEVEL=6
   [ "$LEVEL" -lt 1 ] && LEVEL=1; [ "$LEVEL" -gt 9 ] && LEVEL=9
