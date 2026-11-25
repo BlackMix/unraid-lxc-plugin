@@ -477,28 +477,41 @@ if (isset($_POST['lxc'])) {
             $name = requireContainer();
             $vmid = (int) ($_POST['vmid'] ?? 0);
             $jobId = preg_replace('/[^A-Za-z0-9]/', '', (string) ($_POST['job'] ?? '')) ?: bin2hex(random_bytes(8));
-            // Create the status synchronously so the first poll always finds
-            // the job even if the background worker has not started yet.
             ProxmoxBackup::writeStatus($jobId, 'preparing', 0, time());
-            $worker = escapeshellarg(__DIR__ . '/proxmox-backup-worker.php');
-            $phpBin = escapeshellarg(PHP_BINARY === '' ? 'php' : PHP_BINARY);
-            $log = escapeshellarg(sys_get_temp_dir() . '/lxc-proxmox-' . $jobId . '.log');
-            $cmd = 'nohup ' . $phpBin . ' ' . $worker . ' ' . escapeshellarg($name) . ' '
-                . escapeshellarg((string) $vmid) . ' ' . escapeshellarg($jobId)
-                . ' > ' . $log . ' 2>&1 &';
-            exec($cmd, $out, $rc);
-            if ($rc !== 0) {
-                ProxmoxBackup::writeStatus($jobId, 'error', 100, time(), 0, 0, [
-                    'error' => 'Could not start backup worker (exit ' . $rc . '). Command: ' . $cmd,
-                ]);
+
+            // Send the response to the browser now, then keep running the
+            // backup in this same PHP process. This avoids relying on exec(),
+            // nohup or a CLI PHP binary, which are not always available in the
+            // Unraid webGui context.
+            ignore_user_abort(true);
+            @set_time_limit(0);
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                session_write_close();
             }
-            lxcJson(true, 'Proxmox backup started.', [
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode([
+                'ok' => true,
+                'message' => 'Proxmox backup started.',
                 'job' => $jobId,
                 'started' => true,
-                'rc' => $rc,
-                'php' => PHP_BINARY,
-                'cmd' => $cmd,
             ]);
+            if (function_exists('fastcgi_finish_request')) {
+                fastcgi_finish_request();
+            } else {
+                while (ob_get_level() > 0) {
+                    ob_end_flush();
+                }
+                flush();
+            }
+
+            try {
+                ProxmoxBackup::create($name, $vmid, $jobId);
+            } catch (Throwable $e) {
+                ProxmoxBackup::writeStatus($jobId, 'error', 100, time(), 0, 0, [
+                    'error' => 'Backup failed: ' . $e->getMessage(),
+                ]);
+            }
+            exit;
 
         case 'getProxmoxBackupProgress':
             // Release the session lock so polling is not blocked by the
