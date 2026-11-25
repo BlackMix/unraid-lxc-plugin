@@ -133,10 +133,10 @@ final class ProxmoxBackup
 
         $stamp = gmdate('Y_m_d-H_i_s');
         $base = 'vzdump-lxc-' . $vmid . '-' . $stamp;
-        // Always .tar.gz — written by PHP's gzopen, no external compressor.
-        $compression = 'gz';
-        $final = $targetDir . '/' . $base . '.tar.gz';
-        $part = $targetDir . '/' . $base . '.tar.gz.part';
+        // Zstd with all available threads when present; gzip fallback.
+        $compression = self::hasZstd() ? 'zst' : 'gz';
+        $final = $targetDir . '/' . $base . '.tar.' . $compression;
+        $part = $targetDir . '/' . $base . '.tar.' . $compression . '.part';
         $staging = $backupPath . '/.proxmox-stage-' . $name . '-' . getmypid();
 
         $wasRunning = trim((string) LxcPaths::capture(['lxc-info', '-n', $name, '-sH'])) === 'RUNNING';
@@ -200,7 +200,7 @@ final class ProxmoxBackup
                 . ' && tar -C ' . escapeshellarg($staging) . ' -rf ' . escapeshellarg($tarPart)
                 . ' ./etc/vzdump/pct.conf'
                 . ' 2>> ' . escapeshellarg($tarLog);
-            [$rcTar, $tarStdout, $tarStderr] = LxcPaths::run(['bash', '-c', $cmd], null, 600);
+            [$rcTar, $tarStdout, $tarStderr] = LxcPaths::run(['bash', '-c', $cmd]);
             $tarError = trim((string) @file_get_contents($tarLog));
             if ($tarError === '') {
                 $tarError = trim($tarStderr . ' ' . $tarStdout);
@@ -224,11 +224,20 @@ final class ProxmoxBackup
                 return self::failJob($jobId, $started, $messages);
             }
             self::writeStatus($jobId, 'compressing', 90, $started, 0, 0);
-            [$rcGz] = LxcPaths::run(['bash', '-c', 'gzip -c ' . escapeshellarg($tarPart)
-                . ' > ' . escapeshellarg($part)], null, 600);
+            if ($compression === 'zst') {
+                $compressCmd = 'zstd -q -T' . $threads . ' -o ' . escapeshellarg($part)
+                    . ' ' . escapeshellarg($tarPart);
+            } else {
+                $compressCmd = 'gzip -' . $threads . ' -c ' . escapeshellarg($tarPart)
+                    . ' > ' . escapeshellarg($part);
+            }
+            [$rcCompress, $compOut, $compErr] = LxcPaths::run(['bash', '-c', $compressCmd]);
             @unlink($tarPart);
-            if (!is_file($part) || filesize($part) < 64) {
-                $messages[] = 'Backup archive could not be created (tar/compressor failed).';
+            clearstatcache();
+            if ($rcCompress !== 0 || !is_file($part) || filesize($part) < 64) {
+                $detail = trim($compErr . ' ' . $compOut);
+                $messages[] = 'Backup archive could not be created (compressor failed, exit ' . $rcCompress . '). '
+                    . ($detail !== '' ? str_replace("\n", ' | ', $detail) : 'Check available disk space.');
                 @unlink($part);
                 return self::failJob($jobId, $started, $messages);
             }
