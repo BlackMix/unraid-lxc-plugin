@@ -3,6 +3,16 @@
  * Background worker for Proxmox backups.
  * Invoked by ajax.php with: name vmid jobid
  */
+
+// Prove the worker actually started, before anything else can fail.
+$jobIdArg = (string) ($argv[3] ?? '');
+if ($jobIdArg !== '' && preg_match('/^[A-Za-z0-9]+$/', $jobIdArg) === 1) {
+    @file_put_contents(
+        sys_get_temp_dir() . '/lxc-proxmox-' . $jobIdArg . '.json',
+        json_encode(['stage' => 'starting', 'percent' => 1, 'started' => time(), 'updated' => time()])
+    );
+}
+
 require_once __DIR__ . '/ProxmoxBackup.php';
 
 $name = (string) ($argv[1] ?? '');

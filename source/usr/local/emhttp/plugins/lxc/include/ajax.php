@@ -487,7 +487,18 @@ if (isset($_POST['lxc'])) {
                 . escapeshellarg((string) $vmid) . ' ' . escapeshellarg($jobId)
                 . ' > ' . $log . ' 2>&1 &';
             exec($cmd, $out, $rc);
-            lxcJson(true, 'Proxmox backup started.', ['job' => $jobId, 'started' => true]);
+            if ($rc !== 0) {
+                ProxmoxBackup::writeStatus($jobId, 'error', 100, time(), 0, 0, [
+                    'error' => 'Could not start backup worker (exit ' . $rc . '). Command: ' . $cmd,
+                ]);
+            }
+            lxcJson(true, 'Proxmox backup started.', [
+                'job' => $jobId,
+                'started' => true,
+                'rc' => $rc,
+                'php' => PHP_BINARY,
+                'cmd' => $cmd,
+            ]);
 
         case 'getProxmoxBackupProgress':
             // Release the session lock so polling is not blocked by the
