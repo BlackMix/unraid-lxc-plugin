@@ -477,12 +477,15 @@ if (isset($_POST['lxc'])) {
             $name = requireContainer();
             $vmid = (int) ($_POST['vmid'] ?? 0);
             $jobId = preg_replace('/[^A-Za-z0-9]/', '', (string) ($_POST['job'] ?? '')) ?: bin2hex(random_bytes(8));
-            $result = ProxmoxBackup::create($name, $vmid, $jobId);
-            lxcJson($result['ok'], implode(' ', $result['messages']), [
-                'messages' => $result['messages'],
-                'file' => $result['file'] ?? null,
-                'job' => $jobId,
-            ]);
+            // Run the backup in the background so the browser is not blocked
+            // and the progress polling can reach the server.
+            $worker = escapeshellarg(__DIR__ . '/proxmox-backup-worker.php');
+            $phpBin = escapeshellarg(PHP_BINARY === '' ? 'php' : PHP_BINARY);
+            $cmd = $phpBin . ' ' . $worker . ' ' . escapeshellarg($name) . ' '
+                . escapeshellarg((string) $vmid) . ' ' . escapeshellarg($jobId)
+                . ' > /dev/null 2>&1 &';
+            exec($cmd);
+            lxcJson(true, 'Proxmox backup started.', ['job' => $jobId, 'started' => true]);
 
         case 'getProxmoxBackupProgress':
             // Release the session lock so polling is not blocked by the

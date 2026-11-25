@@ -868,7 +868,15 @@ $(function() {
           let eta = pct > 0 && pct < 100 ? elapsed / pct * (100 - pct) : 0;
           if (s.stage === 'error') {
             window.clearInterval(poll);
-            $('#px_status').text('Failed - ' + (s.error || s.message || 'see message below')).css('color', 'red');
+            $('#px_status').text('Failed - ' + (s.error || s.message || 'unknown error')).css('color', 'red');
+            dialogContent.append('<p class="centered"><button class="logLine" type="button" onclick="top.Shadowbox.close(); location.reload();">Done</button></p>');
+            return;
+          }
+          if (s.stage === 'done') {
+            window.clearInterval(poll);
+            $('#px_bar').css('width', '100%');
+            $('#px_status').text('Done - 100%' + (s.file ? ' - ' + s.file : '')).css('color', 'green');
+            dialogContent.append('<p class="centered"><button class="logLine" type="button" onclick="top.Shadowbox.close(); location.reload();">Done</button></p>');
             return;
           }
           let stage = s.stage === 'archiving' ? 'Archiving files'
@@ -885,17 +893,16 @@ $(function() {
         url: '/plugins/lxc/include/ajax.php',
         data: { 'lxc': '', 'action': 'createProxmoxBackup', 'container': container, 'vmid': vmid, 'job': job },
         success: function (data) {
-          window.clearInterval(poll);
           let result = lxcParseResponse(data);
-          let colour = result.ok ? 'green' : 'red';
-          $('#px_bar').css('width', '100%');
-          $('#px_status').text(result.ok ? 'Done - 100%' : 'Failed');
-          dialogContent.append('<p style="color:' + colour + ';">' + $('<div>').text(result.message).html() + '</p>');
-          dialogContent.append('<p class="centered"><button class="logLine" type="button" onclick="top.Shadowbox.close(); location.reload();">Done</button></p>');
+          if (!result.ok) {
+            window.clearInterval(poll);
+            $('#px_status').text('Failed - ' + result.message).css('color', 'red');
+            dialogContent.append('<p class="centered"><button class="logLine" type="button" onclick="top.Shadowbox.close(); location.reload();">Done</button></p>');
+          }
         },
         error: function (xhr) {
           window.clearInterval(poll);
-          dialogContent.append('<p style="color:red;">Request failed (HTTP ' + xhr.status + ')</p>');
+          $('#px_status').text('Request failed (HTTP ' + xhr.status + ')').css('color', 'red');
           dialogContent.append('<p class="centered"><button class="logLine" type="button" onclick="top.Shadowbox.close(); location.reload();">Done</button></p>');
         }
       });

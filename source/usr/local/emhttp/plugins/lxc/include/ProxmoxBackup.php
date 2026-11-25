@@ -170,8 +170,11 @@ final class ProxmoxBackup
             $owner = self::tarSupports('--numeric-owner') ? '--numeric-owner' : '';
             $xattrs = self::tarSupports('--xattrs') ? '--xattrs' : '';
             $acls = self::tarSupports('--acls') ? '--acls' : '';
+            // du -sb prints "<bytes>\t<path>" — parse the leading number only.
             [$rcDu, $duOut] = LxcPaths::run(['du', '-sb', $staging]);
-            $totalBytes = ($rcDu === 0 && is_numeric(trim($duOut))) ? (int) trim($duOut) : 0;
+            $totalBytes = ($rcDu === 0 && preg_match('/^(\d+)/', trim($duOut), $duMatch) === 1)
+                ? (int) $duMatch[1]
+                : 0;
             $tarPart = $targetDir . '/' . $base . '.tar.part';
             self::writeStatus($jobId, 'copying', 5, $started, $totalBytes, 0);
 

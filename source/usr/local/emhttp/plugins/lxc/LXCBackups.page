@@ -14,7 +14,7 @@ $defaultVmid = (int) ($backupSettings->proxmox_vmid ?: 100);
 ?>
 <link rel="stylesheet" href="/plugins/lxc/css/lxc.css">
 <?php require '/usr/local/emhttp/plugins/lxc/include/csrf.php' ?>
-<script src="/plugins/lxc/js/lxc.js"></script>
+<script src="<?autov('/plugins/lxc/js/lxc.js')?>"></script>
 
 <?php foreach ($allContainers as $container) { ?>
 <h2 id="<?= $container->name ?>"><?= $container->name ?></h2>
