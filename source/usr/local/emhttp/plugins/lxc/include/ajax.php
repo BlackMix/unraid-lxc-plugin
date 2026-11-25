@@ -490,7 +490,9 @@ if (isset($_POST['lxc'])) {
             if (!is_dir($targetDir)) {
                 @mkdir($targetDir, 0755, true);
             }
-            $staging = sys_get_temp_dir() . '/lxc-px-stage-' . $name . '-' . $jobId;
+            // Stage on the backup disk (same filesystem as the archive), NOT
+            // /tmp — on Unraid /tmp is a small RAM-backed tmpfs.
+            $staging = $targetDir . '/.stage-' . $name . '-' . $jobId;
             @mkdir($staging . '/etc/vzdump', 0755, true);
             $pctConf = $staging . '/etc/vzdump/pct.conf';
             $pctContent = ProxmoxBackup::toPctConfig($name, $vmid, $rootfs);
