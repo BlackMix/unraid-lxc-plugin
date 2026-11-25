@@ -12,7 +12,7 @@ PART="${FINAL}.part"
 TARPART="${TARGET}/${BASE}.tar"
 LOG="${TARGET}/${BASE}.tar.log"
 mkdir -p "$STATUS_DIR" "$TARGET"
-echo "worker started $(date) name=$NAME vmid=$VMID job=$JOB rootfs=$ROOTFS comp=$COMP threads=$THREADS" > "$WORKLOG"
+echo "worker started $(date) name=$NAME vmid=$VMID job=$JOB rootfs=$ROOTFS comp=$COMP configured_threads=$THREADS (zstd uses FIXED 18)" > "$WORKLOG"
 
 status() {
   printf '{"stage":"%s","percent":%s,"started":%s,"total":0,"done":0,"updated":%s,"log":"%s"}\n' \
