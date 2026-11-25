@@ -8,3 +8,6 @@
 .DS_Store
 ._*
 *.tmp
+
+# Arquivos de progresso do backup (gerados em runtime)
+source/usr/local/emhttp/plugins/lxc/status/*.json
