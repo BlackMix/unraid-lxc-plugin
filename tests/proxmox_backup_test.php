@@ -14,7 +14,8 @@ file_put_contents('/boot/config/plugins/lxc/lxc.conf', "lxc.lxcpath={$base}/data
 file_put_contents('/boot/config/plugins/lxc/plugin.cfg',
     "SERVICE=enabled\nBDEVTYPE=dir\nTIMEOUT=15\nLXC_BACKUP_SERVICE=enabled\n"
     . "LXC_BACKUP_PATH={$base}/backup\nLXC_BACKUP_KEEP=2\nLXC_BACKUP_THREADS=1\n"
-    . "LXC_BACKUP_COMPRESSION=6\nLXC_BACKUP_USE_SNAPSHOT=disabled\nLXC_PROXMOX_VMID=100\n");
+    . "LXC_BACKUP_COMPRESSION=6\nLXC_BACKUP_USE_SNAPSHOT=disabled\nLXC_PROXMOX_VMID=100\n"
+    . "LXC_PROXMOX_BACKUP_PATH={$base}/backup\n");
 file_put_contents($base . '/data/px1/rootfs/etc/os-release', "ID=debian\nPRETTY_NAME=\"Debian\"\n");
 file_put_contents($base . '/data/px1/config', implode("\n", [
     'lxc.rootfs.path = dir:' . $base . '/data/px1/rootfs',
@@ -156,6 +157,7 @@ echo "\nGlobal VMID setting\n";
 require_once $include . '/Settings.php';
 $settings = new Settings();
 check('default proxmox vmid is 100', (string) $settings->proxmox_vmid === '100', (string) $settings->proxmox_vmid);
+check('proxmox backup path configured', ProxmoxBackup::backupPath() === $base . '/backup', ProxmoxBackup::backupPath());
 
 echo "\n" . ($failures === 0 ? 'ALL PROXMOX BACKUP TESTS PASSED' : "$failures TEST(S) FAILED") . "\n";
 exit($failures === 0 ? 0 : 1);

@@ -20,6 +20,7 @@ class Settings {
   public $backup_compression;
   public $backup_use_snapshot;
   public $proxmox_vmid;
+  public $proxmox_backup_path;
   public $github_user;
   public $github_token;
 
@@ -40,6 +41,7 @@ class Settings {
     $this->backup_compression = getVariable('/boot/config/plugins/lxc/plugin.cfg', 'LXC_BACKUP_COMPRESSION');
     $this->backup_use_snapshot = getVariable('/boot/config/plugins/lxc/plugin.cfg', 'LXC_BACKUP_USE_SNAPSHOT');
     $this->proxmox_vmid = getVariable('/boot/config/plugins/lxc/plugin.cfg', 'LXC_PROXMOX_VMID', '100');
+    $this->proxmox_backup_path = getVariable('/boot/config/plugins/lxc/plugin.cfg', 'LXC_PROXMOX_BACKUP_PATH', '');
     $this->github_user = getVariable('/boot/config/plugins/lxc/plugin.cfg', 'LXC_GITHUB_USER');
     $this->github_token = getVariable('/boot/config/plugins/lxc/plugin.cfg', 'LXC_GITHUB_TOKEN');
   }
@@ -141,12 +143,13 @@ class Settings {
     exec("sed -i '/^DOWNLOAD_SERVER=\"*/c\DOWNLOAD_SERVER=\"" . escapeshellarg($default_cont_url) . "\"' /usr/share/lxc/templates/lxc-download");
   }
 
-  function changeBackup($backup_enabled, $backup_path, $backup_keep, $backup_threads, $backup_compression, $backup_use_snapshot, $proxmox_vmid = '100') {
+  function changeBackup($backup_enabled, $backup_path, $backup_keep, $backup_threads, $backup_compression, $backup_use_snapshot, $proxmox_vmid = '100', $proxmox_backup_path = '') {
     $vmid = (int) $proxmox_vmid;
     if ($vmid < 100 || $vmid > 999999999) {
       $vmid = 100;
     }
     setVariable('/boot/config/plugins/lxc/plugin.cfg', 'LXC_PROXMOX_VMID', (string) $vmid);
+    setVariable('/boot/config/plugins/lxc/plugin.cfg', 'LXC_PROXMOX_BACKUP_PATH', trim((string) $proxmox_backup_path));
     setVariable('/boot/config/plugins/lxc/plugin.cfg', 'LXC_BACKUP_SERVICE', $backup_enabled);
     setVariable('/boot/config/plugins/lxc/plugin.cfg', 'LXC_BACKUP_PATH', $backup_path);
     setVariable('/boot/config/plugins/lxc/plugin.cfg', 'LXC_BACKUP_KEEP', $backup_keep);

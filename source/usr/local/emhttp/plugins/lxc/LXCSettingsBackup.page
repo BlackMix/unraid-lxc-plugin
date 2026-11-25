@@ -87,6 +87,13 @@ Use Snapshot:
 <p><b>Proxmox-compatible backups</b> are created on the Backups page and do not require the legacy backup service.</p>
 </blockquote>
 
+Proxmox backup path:
+: <input type="text" id="proxmox_backup_path" name="PROXMOX_BACKUP_PATH" autocomplete="off" spellcheck="false" data-pickfolders="true" data-pickfilter="HIDE_FILES_FILTER" value="<?=htmlspecialchars((string) $settings->proxmox_backup_path)?>" placeholder="/mnt/user/backups/lxc-proxmox" class="forbidSpace">
+
+<blockquote class="inline_help">
+<p>Directory where Proxmox-compatible backups are stored (in a <code>proxmox/&lt;container&gt;/</code> subfolder). Independent of the legacy backup path. Defaults to <code>/mnt/user/backups/lxc-proxmox</code> and is created automatically if missing.</p>
+</blockquote>
+
 Default Proxmox VMID:
 : <input type="number" id="proxmox_vmid" name="PROXMOX_VMID" min="100" max="999999999" style="width: 120px" value="<?=htmlspecialchars((string) $settings->proxmox_vmid)?>" required>
 
@@ -108,7 +115,7 @@ Update configuration:
 
 <?php
 if(isset($_POST['changeBACKUP'])) {
-$settings->changeBackup($_POST["BACKUP_ENABLED"], $_POST["BACKUPDIR"], $_POST["BACKUPS_TO_KEEP"], $_POST["CPU_THREADS"], $_POST["COMPRESSION_RATIO"], $_POST["USE_SNAPSHOT"], $_POST["PROXMOX_VMID"] ?? '100');
+$settings->changeBackup($_POST["BACKUP_ENABLED"], $_POST["BACKUPDIR"], $_POST["BACKUPS_TO_KEEP"], $_POST["CPU_THREADS"], $_POST["COMPRESSION_RATIO"], $_POST["USE_SNAPSHOT"], $_POST["PROXMOX_VMID"] ?? '100', $_POST["PROXMOX_BACKUP_PATH"] ?? '');
 echo '<script>parent.window.location.reload();</script>';
 }
 ?>

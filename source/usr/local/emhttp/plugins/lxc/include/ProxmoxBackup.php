@@ -33,11 +33,7 @@ final class ProxmoxBackup
         if ($vmid < 100 || $vmid > 999999999) {
             return ['ok' => false, 'messages' => ['VMID must be between 100 and 999999999.']];
         }
-        $settings = new Settings();
-        $backupPath = trim((string) ($settings->backup_path ?? ''));
-        if ($backupPath === '' || !is_dir($backupPath)) {
-            return ['ok' => false, 'messages' => ['Backup path is not configured or does not exist.']];
-        }
+        $backupPath = self::backupPath();
 
         $config = new ContainerConfig($name);
         if (!$config->exists()) {
@@ -271,11 +267,26 @@ final class ProxmoxBackup
         LxcPaths::run(['rm', '-rf', '--', $dir]);
     }
 
-    public static function dir(string $container): string
+    public static function backupPath(): string
     {
         $settings = new Settings();
+        $path = trim((string) ($settings->proxmox_backup_path ?? ''));
+        if ($path === '') {
+            $path = trim((string) ($settings->backup_path ?? ''));
+        }
+        if ($path === '') {
+            $path = '/mnt/user/backups/lxc-proxmox';
+        }
+        if (!is_dir($path)) {
+            @mkdir($path, 0755, true);
+        }
 
-        return rtrim((string) ($settings->backup_path ?? ''), '/') . '/proxmox/' . $container;
+        return rtrim($path, '/');
+    }
+
+    public static function dir(string $container): string
+    {
+        return self::backupPath() . '/proxmox/' . $container;
     }
 
     /**
