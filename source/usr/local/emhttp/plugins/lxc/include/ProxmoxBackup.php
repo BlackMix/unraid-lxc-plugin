@@ -200,13 +200,17 @@ final class ProxmoxBackup
                 . ' && tar -C ' . escapeshellarg($staging) . ' -rf ' . escapeshellarg($tarPart)
                 . ' ./etc/vzdump/pct.conf'
                 . ' 2>> ' . escapeshellarg($tarLog);
-            [$rcTar] = LxcPaths::run(['bash', '-c', $cmd], null, 600);
+            [$rcTar, $tarStdout, $tarStderr] = LxcPaths::run(['bash', '-c', $cmd], null, 600);
             $tarError = trim((string) @file_get_contents($tarLog));
+            if ($tarError === '') {
+                $tarError = trim($tarStderr . ' ' . $tarStdout);
+            }
             clearstatcache();
             if ($rcTar !== 0 || !is_file($tarPart)) {
-                @unlink($tarLog);
-                $messages[] = 'Backup archive could not be created (tar failed). '
-                    . ($tarError !== '' ? 'tar said: ' . $tarError : 'Exit code ' . $rcTar . ' (see /tmp for details).');
+                $messages[] = 'Backup archive could not be created (tar failed, exit ' . $rcTar . '). '
+                    . ($tarError !== ''
+                        ? 'tar said: ' . str_replace("\n", ' | ', $tarError)
+                        : 'No detail captured. Full log kept at ' . $tarLog);
                 @unlink($tarPart);
                 return self::failJob($jobId, $started, $messages);
             }
