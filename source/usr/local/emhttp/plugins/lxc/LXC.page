@@ -212,6 +212,7 @@ foreach ($allContainers as $container) {
             <div class="divider"></div>
             <li><a href="#" class="<?= $container->name ?>" id="editconfig"><i class="fa fa-fw fa-file-text-o fa-lg"></i>  Show/Edit Config</a></li>
             <li><a href="#" class="snapshotCONT" id="<?= $container->name ?>"><i class="fa fa-fw fa-camera fa-lg"></i>  Create Snapshot</a></li>
+            <li><a href="/LXCBackups#<?= $container->name ?>"><i class="fa fa-fw fa-archive fa-lg"></i>  Backup / Proxmox</a></li>
             <?php if($settings->backup_enabled == "enabled") {
               echo '<li><a href="#" class="backupCONT" id="' . $container->name . '"><i class="fa fa-fw fa-archive fa-lg"></i>  Create Backup</a></li>';
               } ?>
