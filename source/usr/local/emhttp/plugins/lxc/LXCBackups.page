@@ -6,11 +6,11 @@ Cond="exec(\"lxc-ls 2>/dev/null\")"
 <?php
 require_once('/usr/local/emhttp/plugins/lxc/include/Container.php');
 require_once('/usr/local/emhttp/plugins/lxc/include/ProxmoxBackup.php');
-if (!isset($allContainers) || !is_array($allContainers)) {
-  $allContainers = getAllContainers();
-}
 $backupSettings = new Settings();
 $defaultVmid = (int) ($backupSettings->proxmox_vmid ?: 100);
+if (!isset($allContainers) || !is_array($allContainers)) {
+  $allContainers = array();
+}
 ?>
 <link rel="stylesheet" href="/plugins/lxc/css/lxc.css">
 <?php require '/usr/local/emhttp/plugins/lxc/include/csrf.php' ?>
