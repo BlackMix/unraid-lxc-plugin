@@ -191,19 +191,26 @@ final class ProxmoxBackup
                 : 0;
             $tarPart = $targetDir . '/' . $base . '.tar';
             self::writeStatus($jobId, 'copying', 5, $started, $totalBytes, 0);
+            $tarLog = $targetDir . '/' . $base . '.tar.log';
             $cmd = 'cd ' . escapeshellarg($rootfs)
                 . ' && tar --one-file-system --warning=no-file-changed --warning=no-file-removed'
                 . ' --exclude=./snaps --exclude=./tmp/?* --exclude=./var/run/?*pid'
                 . ' -cf ' . escapeshellarg($tarPart) . ' .'
+                . ' 2> ' . escapeshellarg($tarLog)
                 . ' && tar -C ' . escapeshellarg($staging) . ' -rf ' . escapeshellarg($tarPart)
-                . ' ./etc/vzdump/pct.conf';
+                . ' ./etc/vzdump/pct.conf'
+                . ' 2>> ' . escapeshellarg($tarLog);
             [$rcTar] = LxcPaths::run(['bash', '-c', $cmd], null, 600);
+            $tarError = trim((string) @file_get_contents($tarLog));
             clearstatcache();
             if ($rcTar !== 0 || !is_file($tarPart)) {
-                $messages[] = 'Backup archive could not be created (tar failed).';
+                @unlink($tarLog);
+                $messages[] = 'Backup archive could not be created (tar failed). '
+                    . ($tarError !== '' ? 'tar said: ' . $tarError : 'Exit code ' . $rcTar . ' (see /tmp for details).');
                 @unlink($tarPart);
                 return self::failJob($jobId, $started, $messages);
             }
+            @unlink($tarLog);
             $tarSize = (int) filesize($tarPart);
             if ($totalBytes > 0 && $tarSize < ($totalBytes * 0.5)) {
                 $messages[] = 'Backup is incomplete: rootfs has ' . round($totalBytes / 1048576)
