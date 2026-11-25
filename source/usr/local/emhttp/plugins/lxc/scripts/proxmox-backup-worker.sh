@@ -54,10 +54,11 @@ cp "$PCT" "$SNAP/etc/vzdump/pct.conf" || fail "cannot copy pct.conf"
 
 status compressing 80
 CORES=$(nproc 2>/dev/null || echo 1)
-ZTHREADS="$THREADS"; [ "$ZTHREADS" -le 1 ] && ZTHREADS="$CORES"
+# Fixed 18 threads: leaves headroom on the 48-core Xeon for UnRAID itself.
+ZTHREADS=18
 # tar with stdin to allow zstd streaming, no -r append.
 if [ "$COMP" = "zst" ] && command -v zstd >/dev/null 2>&1; then
-  echo "zstd threads=$ZTHREADS (cores=$CORES, configured=$THREADS)" >> "$WORKLOG"
+  echo "zstd threads=$ZTHREADS fixed (cores=$CORES, configured=$THREADS ignored)" >> "$WORKLOG"
   ( cd "$SNAP" && tar --numeric-owner --xattrs --acls -cf - . 2> "$LOG" ) \
     | zstd -q -T"$ZTHREADS" -o "$PART" || fail "tar|zstd failed: $(grep -v 'Error is not recoverable' "$LOG" | head -5 | tr '\n' ' ')"
 else
