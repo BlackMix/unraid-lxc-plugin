@@ -477,33 +477,15 @@ if (isset($_POST['lxc'])) {
             $name = requireContainer();
             $vmid = (int) ($_POST['vmid'] ?? 0);
             $jobId = preg_replace('/[^A-Za-z0-9]/', '', (string) ($_POST['job'] ?? '')) ?: bin2hex(random_bytes(8));
-            ProxmoxBackup::writeStatus($jobId, 'preparing', 0, time());
-
-            // Start a detached background worker. The webGui's PHP_BINARY may
-            // be the FPM/CGI binary (which cannot run a script from argv), so
-            // probe a list of known CLI paths and use the first that exists.
-            $candidates = [PHP_BINARY, '/usr/bin/php', '/usr/local/bin/php', '/bin/php', 'php'];
-            $phpBin = '';
-            foreach ($candidates as $candidate) {
-                if (!is_string($candidate) || $candidate === '') {
-                    continue;
-                }
-                if ($candidate === 'php' || is_executable($candidate)) {
-                    $phpBin = $candidate;
-                    break;
-                }
-            }
-            $worker = escapeshellarg(__DIR__ . '/proxmox-backup-worker.php');
-            $cmd = escapeshellarg($phpBin) . ' ' . $worker . ' '
-                . escapeshellarg($name) . ' ' . escapeshellarg((string) $vmid) . ' '
-                . escapeshellarg($jobId) . ' > /dev/null 2>&1 &';
-            exec($cmd);
-
-            lxcJson(true, 'Proxmox backup started.', [
+            // Run synchronously. Background workers (exec/nohup/fastcgi) are
+            // not reliable in the Unraid webGUI, so we keep the same pattern
+            // used by the legacy backup: one request, one result. Errors are
+            // returned to the UI instead of leaving a stale progress status.
+            $result = ProxmoxBackup::create($name, $vmid, $jobId);
+            lxcJson($result['ok'], implode(' ', $result['messages']), [
+                'messages' => $result['messages'],
+                'file' => $result['file'] ?? null,
                 'job' => $jobId,
-                'started' => true,
-                'php' => $phpBin,
-                'cmd' => $cmd,
             ]);
 
         case 'getProxmoxBackupProgress':

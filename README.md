@@ -187,8 +187,8 @@ service, that creates archives in the `vzdump` format used by Proxmox VE:
 **Download** button generates a short-lived signed link (5 minutes) for each
 backup; **Delete** asks for confirmation.
 
-- While the backup runs, a dialog shows a **progress bar with percentage and
-  estimated remaining time**, updated once per second (archiving → compressing).
+- While the backup runs, a dialog shows a "please wait" message. The result
+  (or the error) is displayed when the request finishes.
 - The container is **stopped** for the duration of the backup and restarted
   afterwards, even if the backup fails.
 - The VMID can be set globally under Settings → Backup (`LXC_PROXMOX_VMID`,
