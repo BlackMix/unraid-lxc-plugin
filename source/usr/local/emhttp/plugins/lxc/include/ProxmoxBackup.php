@@ -164,32 +164,37 @@ final class ProxmoxBackup
                 return self::failJob($jobId, $started, $messages);
             }
 
-            // Copy the rootfs FIRST so the generated pct.conf always wins.
-            $copied = self::copyRootfs($rootfs, $staging, $messages);
-            self::writeStatus($jobId, 'staged', 4, $started, 0, 0);
-            if (!$copied) {
-                return self::failJob($jobId, $started, $messages);
-            }
+            // Only stage the generated pct.conf. The rootfs is archived
+            // directly with tar --one-file-system: no cp -al/cp -a (which can
+            // hang on bind mounts or device files) and no extra disk copy.
             $pctConf = $staging . '/etc/vzdump/pct.conf';
             if (!self::writeFile($pctConf, self::toPctConfig($name, $vmid, $rootfs), $messages, 'pct.conf')) {
                 return self::failJob($jobId, $started, $messages);
             }
+            self::writeStatus($jobId, 'staged', 4, $started, 0, 0);
 
             $threads = max(1, min(16, (int) ($settings->backup_threads ?? 1)));
-            $exclude = "--exclude=./snaps --exclude=./tmp/?* --exclude=./var/run/?*pid";
+            $exclude = "--exclude=./snaps --exclude=./tmp/?* --exclude=./var/run/?*pid --exclude=./dev/ --one-file-system";
             $owner = self::tarSupports('--numeric-owner') ? '--numeric-owner' : '';
             $xattrs = self::tarSupports('--xattrs') ? '--xattrs' : '';
             $acls = self::tarSupports('--acls') ? '--acls' : '';
             // du -sb prints "<bytes>\t<path>" — parse the leading number only.
-            [$rcDu, $duOut] = LxcPaths::run(['du', '-sb', $staging]);
+            [$rcDu, $duOut] = LxcPaths::run(['du', '-sb', '-x', $rootfs], null, 60);
             $totalBytes = ($rcDu === 0 && preg_match('/^(\d+)/', trim($duOut), $duMatch) === 1)
                 ? (int) $duMatch[1]
                 : 0;
             $tarPart = $targetDir . '/' . $base . '.tar.part';
             self::writeStatus($jobId, 'copying', 5, $started, $totalBytes, 0);
 
-            $cmd = 'tar -C ' . escapeshellarg($staging) . ' ' . $exclude . ' '
-                . $owner . ' ' . $xattrs . ' ' . $acls . ' -cf ' . escapeshellarg($tarPart) . ' . 2>/dev/null';
+            // First entry: the generated pct.conf at ./etc/vzdump/pct.conf.
+            [$rcTarCfg] = LxcPaths::run(['tar', '-C', $staging, '-cf', $tarPart, './etc/vzdump/pct.conf'], null, 60);
+            if ($rcTarCfg !== 0) {
+                $messages[] = 'Could not add pct.conf to the archive.';
+                return self::failJob($jobId, $started, $messages);
+            }
+            // Then append the rootfs directly, without following mounts.
+            $cmd = 'tar -C ' . escapeshellarg($rootfs) . ' ' . $exclude . ' '
+                . $owner . ' ' . $xattrs . ' ' . $acls . ' -rf ' . escapeshellarg($tarPart) . ' . 2>/dev/null';
             $process = @proc_open($cmd, [
                 0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w'],
             ], $pipes);
