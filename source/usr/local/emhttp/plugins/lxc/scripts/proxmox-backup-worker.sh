@@ -43,7 +43,7 @@ echo "rootfs size: $(du -sh "$ROOTFS" 2>/dev/null)" >> "$WORKLOG"
 tar -C "$STAGING" $TAROPTS -cf "$TARPART" ./etc/vzdump/pct.conf 2> "$LOG" || fail "tar pct.conf: $(tail -3 "$LOG" | tr '\n' ' ')"
 echo "pct.conf tar done $(date), bytes=$(wc -c < "$TARPART" 2>/dev/null)" >> "$WORKLOG"
 cd "$ROOTFS" || fail "cannot cd rootfs"
-tar $TAROPTS --exclude=./snaps --exclude=./tmp/?* --exclude=./var/run/?*pid -rf "$TARPART" . 2>> "$LOG" || fail "tar rootfs: $(tail -3 "$LOG" | tr '\n' ' ')"
+tar $TAROPTS --exclude=./snaps --exclude=./tmp/?* --exclude=./var/run/?*pid -rf "$TARPART" . 2>> "$LOG" || fail "tar rootfs: $(grep -v 'Error is not recoverable' "$LOG" | head -5 | tr '\n' ' ')"
 echo "rootfs tar done $(date), bytes=$(wc -c < "$TARPART" 2>/dev/null)" >> "$WORKLOG"
 
 status compressing 90
