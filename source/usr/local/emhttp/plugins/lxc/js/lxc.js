@@ -837,7 +837,12 @@ $(function() {
     }[stage] || 'Working';
   }
 
+  let pxBackupRunning = false;
   $(document).on('click', '.createProxmoxBackup', function () {
+    if (pxBackupRunning) {
+      return;
+    }
+    pxBackupRunning = true;
     let container = $(this).attr('data-container');
     let vmid = $('#px_vmid_' + container).val();
     let job = 'px' + Date.now() + Math.floor(Math.random() * 100000);
@@ -845,7 +850,6 @@ $(function() {
       content: '<div id="dialogContent" class="logLine spacing"></div>',
       player: 'html',
       title: 'Create Proxmox Backup',
-      onClose: function () { location.reload(); },
       height: Math.min(screen.availHeight, 600),
       width: Math.min(screen.availWidth, 1000)
     });

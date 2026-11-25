@@ -3,11 +3,11 @@
   <!ENTITY name      "lxc">
   <!ENTITY title     "LXC v2">
   <!ENTITY author    "BlackMix">
-  <!ENTITY version   "2026.11.54">
+  <!ENTITY version   "2026.11.55">
   <!ENTITY launch    "Settings/LXCSettings">
   <!ENTITY gitURL    "https://github.com/&author;/unraid-&name;-plugin/raw/master">
   <!ENTITY pluginURL "&gitURL;/&name;.plg">
-  <!ENTITY md5       "857c1f5b0b211d20e8750adb1f12ece5">
+  <!ENTITY md5       "b8691f4f707bd25d9b1bb727867b22aa">
   <!ENTITY plugin    "/boot/config/plugins/&name;">
   <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 ]>
