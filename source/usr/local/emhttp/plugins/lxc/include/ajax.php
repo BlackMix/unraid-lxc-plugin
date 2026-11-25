@@ -477,14 +477,16 @@ if (isset($_POST['lxc'])) {
             $name = requireContainer();
             $vmid = (int) ($_POST['vmid'] ?? 0);
             $jobId = preg_replace('/[^A-Za-z0-9]/', '', (string) ($_POST['job'] ?? '')) ?: bin2hex(random_bytes(8));
-            // Run the backup in the background so the browser is not blocked
-            // and the progress polling can reach the server.
+            // Create the status synchronously so the first poll always finds
+            // the job even if the background worker has not started yet.
+            ProxmoxBackup::writeStatus($jobId, 'preparing', 0, time());
             $worker = escapeshellarg(__DIR__ . '/proxmox-backup-worker.php');
             $phpBin = escapeshellarg(PHP_BINARY === '' ? 'php' : PHP_BINARY);
-            $cmd = $phpBin . ' ' . $worker . ' ' . escapeshellarg($name) . ' '
+            $log = escapeshellarg(sys_get_temp_dir() . '/lxc-proxmox-' . $jobId . '.log');
+            $cmd = 'nohup ' . $phpBin . ' ' . $worker . ' ' . escapeshellarg($name) . ' '
                 . escapeshellarg((string) $vmid) . ' ' . escapeshellarg($jobId)
-                . ' > /dev/null 2>&1 &';
-            exec($cmd);
+                . ' > ' . $log . ' 2>&1 &';
+            exec($cmd, $out, $rc);
             lxcJson(true, 'Proxmox backup started.', ['job' => $jobId, 'started' => true]);
 
         case 'getProxmoxBackupProgress':
