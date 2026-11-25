@@ -148,9 +148,10 @@ final class ProxmoxBackup
                 self::writeStatus($jobId, 'stopping', 2, $started, 0, 0);
                 $timeout = (int) ($settings->timeout ?? 15);
                 [, , $err] = LxcPaths::run(['lxc-stop', '--timeout=' . max(1, $timeout), '-n', $name]);
-                if ((int) LxcPaths::capture(['lxc-info', '-n', $name, '-sH']) !== 0
-                    && trim((string) LxcPaths::capture(['lxc-info', '-n', $name, '-sH'])) !== 'STOPPED') {
-                    $messages[] = 'Could not stop the container; no backup was created.' . ($err !== '' ? ' ' . trim($err) : '');
+                $state = trim((string) LxcPaths::capture(['lxc-info', '-n', $name, '-sH']));
+                if ($state !== 'STOPPED') {
+                    $messages[] = 'Could not stop the container (state: ' . ($state !== '' ? $state : 'unknown')
+                        . '); no backup was created.' . ($err !== '' ? ' ' . trim($err) : '');
                     return self::failJob($jobId, $started, $messages);
                 }
                 $stopped = true;
@@ -192,13 +193,14 @@ final class ProxmoxBackup
             $tarPart = $targetDir . '/' . $base . '.tar';
             self::writeStatus($jobId, 'copying', 5, $started, $totalBytes, 0);
             $tarLog = $targetDir . '/' . $base . '.tar.log';
-            $cmd = 'cd ' . escapeshellarg($rootfs)
-                . ' && tar --one-file-system'
-                . ' --exclude=./snaps --exclude=./tmp/?* --exclude=./var/run/?*pid'
-                . ' -cf ' . escapeshellarg($tarPart) . ' .'
+            // pct.conf MUST be the first entry in the archive (vzdump format).
+            $cmd = 'tar -C ' . escapeshellarg($staging) . ' ' . $owner . ' ' . $xattrs . ' ' . $acls
+                . ' -cf ' . escapeshellarg($tarPart) . ' ./etc/vzdump/pct.conf'
                 . ' 2> ' . escapeshellarg($tarLog)
-                . ' && tar -C ' . escapeshellarg($staging) . ' -rf ' . escapeshellarg($tarPart)
-                . ' ./etc/vzdump/pct.conf'
+                . ' && cd ' . escapeshellarg($rootfs)
+                . ' && tar --one-file-system ' . $owner . ' ' . $xattrs . ' ' . $acls
+                . ' --exclude=./snaps --exclude=./tmp/?* --exclude=./var/run/?*pid'
+                . ' -rf ' . escapeshellarg($tarPart) . ' .'
                 . ' 2>> ' . escapeshellarg($tarLog);
             [$rcTar, $tarStdout, $tarStderr] = LxcPaths::run(['bash', '-c', $cmd]);
             $tarError = trim((string) @file_get_contents($tarLog));
@@ -228,7 +230,9 @@ final class ProxmoxBackup
                 $compressCmd = 'zstd -q -T' . $threads . ' -o ' . escapeshellarg($part)
                     . ' ' . escapeshellarg($tarPart);
             } else {
-                $compressCmd = 'gzip -' . $threads . ' -c ' . escapeshellarg($tarPart)
+                // gzip's -N is a compression LEVEL (1..9), not thread count.
+                $level = max(1, min(9, (int) ($settings->backup_compression ?? 6)));
+                $compressCmd = 'gzip -' . $level . ' -c ' . escapeshellarg($tarPart)
                     . ' > ' . escapeshellarg($part);
             }
             [$rcCompress, $compOut, $compErr] = LxcPaths::run(['bash', '-c', $compressCmd]);
@@ -475,9 +479,10 @@ final class ProxmoxBackup
 
         $size = 1;
         if ($rootfsPath !== '' && is_dir($rootfsPath)) {
+            // du -sm prints "<MiB>\t<path>" — parse the leading number.
             [$rc, $out] = LxcPaths::run(['du', '-sm', $rootfsPath]);
-            if ($rc === 0 && is_numeric(trim($out))) {
-                $size = max(1, (int) ceil(((int) trim($out)) * 1.2 / 1024));
+            if ($rc === 0 && preg_match('/^(\d+)/', trim($out), $sizeMatch) === 1) {
+                $size = max(1, (int) ceil(((int) $sizeMatch[1]) * 1.2 / 1024));
             }
         }
         $lines[] = 'rootfs: local-lvm:vm-' . $vmid . '-disk-0,size=' . $size . 'G';
