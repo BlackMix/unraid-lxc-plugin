@@ -192,9 +192,13 @@ final class ProxmoxBackup
                 $messages[] = 'Could not add pct.conf to the archive.';
                 return self::failJob($jobId, $started, $messages);
             }
-            // Then append the rootfs directly, without following mounts.
-            $cmd = 'tar -C ' . escapeshellarg($rootfs) . ' ' . $exclude . ' '
-                . $owner . ' ' . $xattrs . ' ' . $acls . ' -rf ' . escapeshellarg($tarPart) . ' . 2>/dev/null';
+            // Then append the rootfs from an explicit file list. find -xdev
+            // skips mounts, and we only include regular files, dirs and
+            // symlinks (no devices, sockets or FIFOs, which can hang tar).
+            $cmd = 'cd ' . escapeshellarg($rootfs)
+                . ' && find . -xdev \( -type f -o -type d -o -type l \) -print0'
+                . ' | timeout 600 tar --null ' . $owner . ' ' . $xattrs . ' ' . $acls
+                . ' -rf ' . escapeshellarg($tarPart) . ' -T - 2>/dev/null';
             $process = @proc_open($cmd, [
                 0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w'],
             ], $pipes);
