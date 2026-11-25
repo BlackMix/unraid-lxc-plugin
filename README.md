@@ -173,6 +173,48 @@ To go fully self-hosted:
 The next plugin install will then download everything from your GitHub and no
 fallback message will appear anywhere.
 
+## Proxmox-compatible backups (experimental)
+
+The **Backups** page has a second section, independent of the legacy backup
+service, that creates archives in the `vzdump` format used by Proxmox VE:
+
+```
+<backup_path>/proxmox/<container>/vzdump-lxc-<VMID>-<timestamp>.tar.zst
+```
+
+(with `.tar.gz` as a fallback when `zstd` is unavailable). The archive contains
+`./etc/vzdump/pct.conf` plus the container rootfs at the top level. A
+**Download** button generates a short-lived signed link (5 minutes) for each
+backup; **Delete** asks for confirmation.
+
+- The container is **stopped** for the duration of the backup and restarted
+  afterwards, even if the backup fails.
+- The VMID can be set globally under Settings → Backup (`LXC_PROXMOX_VMID`,
+  default `100`) and overridden per backup on the Backups page.
+- Retention (`LXC_BACKUP_KEEP`) is applied only to `vzdump-*` files in the
+  separate `proxmox/` directory; the legacy `.tar.xz` backups are untouched.
+- `pct.conf` is generated from the LXC config: cores, memory/swap (converted to
+  MiB), hostname, ostype, onboot, description, and `netN` entries with veth
+  bridge, VLAN `tag`, hwaddr, static/DHCP IPv4, static/auto IPv6 and
+  `link_down=1`. IPv4/IPv6 addresses without a prefix are normalised to `/24`
+  and `/64` respectively. The `rootfs` line is a **placeholder**:
+  `local-lvm:vm-<VMID>-disk-0,size=<size>G`.
+- **macvlan and `veth.mode=router` containers are refused** — those topologies
+  cannot be represented faithfully in `pct.conf`.
+
+Restore on Proxmox with:
+
+```sh
+pct restore <VMID> <file> --rootfs <storage>:<size>
+```
+
+**This is experimental and has NOT been validated with a real `pct restore`.**
+Before relying on it, verify on your Proxmox version: the generated `net0`
+(veth + VLAN + IPv4/IPv6), the placeholder `rootfs` override, and both
+`.tar.zst` and `.tar.gz` archives. The backup files themselves are verified
+locally by `tests/proxmox_backup_test.php` (`tar -tf` checks for both
+`./etc/vzdump/pct.conf` and the rootfs files).
+
 ## Development
 
 The backend helpers are dependency-free PHP classes under
@@ -186,6 +228,8 @@ The backend helpers are dependency-free PHP classes under
 | `Devices.php` | GPU/USB/misc discovery and passthrough rules |
 | `Ssh.php` | in-container SSH provisioning |
 | `Resources.php` | memory/CPU limits |
+| `GuestNetwork.php` | in-guest network config (ifupdown/networkd/netplan/NM) |
+| `ProxmoxBackup.php` | Proxmox-compatible vzdump backups |
 
 Run the backend tests with:
 

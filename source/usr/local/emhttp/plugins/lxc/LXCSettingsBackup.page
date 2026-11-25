@@ -83,6 +83,18 @@ Use Snapshot:
 <p>If enabled a temporary snapshot is created from which the backup will be created from.<br/>This is usefull if you are using a high compression ratio and you have a container that needs to be up and running as quickly as possible again.</p>
 </blockquote>
 
+<blockquote class="inline_help">
+<p><b>Proxmox-compatible backups</b> are created on the Backups page and do not require the legacy backup service.</p>
+</blockquote>
+
+Default Proxmox VMID:
+: <input type="number" id="proxmox_vmid" name="PROXMOX_VMID" min="100" max="999999999" style="width: 120px" value="<?=htmlspecialchars((string) $settings->proxmox_vmid)?>" required>
+
+<blockquote class="inline_help">
+<p>Default VMID used when creating Proxmox-compatible backups (100..999999999). It can be overridden per backup. Restore on Proxmox with <code>pct restore &lt;vmid&gt; &lt;file&gt; --rootfs &lt;storage&gt;:&lt;size&gt;</code>.</p>
+<p><b style="color: #ff0000;">EXPERIMENTAL:</b> validate with a real <code>pct restore</code> before relying on these backups.</p>
+</blockquote>
+
 <p>&nbsp;</p>
 
 Update configuration:
@@ -96,7 +108,7 @@ Update configuration:
 
 <?php
 if(isset($_POST['changeBACKUP'])) {
-$settings->changeBackup($_POST["BACKUP_ENABLED"], $_POST["BACKUPDIR"], $_POST["BACKUPS_TO_KEEP"], $_POST["CPU_THREADS"], $_POST["COMPRESSION_RATIO"], $_POST["USE_SNAPSHOT"]);
+$settings->changeBackup($_POST["BACKUP_ENABLED"], $_POST["BACKUPDIR"], $_POST["BACKUPS_TO_KEEP"], $_POST["CPU_THREADS"], $_POST["COMPRESSION_RATIO"], $_POST["USE_SNAPSHOT"], $_POST["PROXMOX_VMID"] ?? '100');
 echo '<script>parent.window.location.reload();</script>';
 }
 ?>

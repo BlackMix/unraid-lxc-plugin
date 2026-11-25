@@ -5,6 +5,7 @@ require_once __DIR__ . '/Paths.php';
 require_once __DIR__ . '/ContainerConfig.php';
 require_once __DIR__ . '/Network.php';
 require_once __DIR__ . '/GuestNetwork.php';
+require_once __DIR__ . '/ProxmoxBackup.php';
 require_once __DIR__ . '/Devices.php';
 require_once __DIR__ . '/Resources.php';
 require_once __DIR__ . '/Ssh.php';
@@ -467,6 +468,30 @@ if (isset($_POST['lxc'])) {
                 'usb' => Devices::listUsb(),
                 'misc' => Devices::listMisc(),
             ]);
+
+        case 'createProxmoxBackup':
+            $name = requireContainer();
+            $vmid = (int) ($_POST['vmid'] ?? 0);
+            $result = ProxmoxBackup::create($name, $vmid);
+            lxcJson($result['ok'], implode(' ', $result['messages']), [
+                'messages' => $result['messages'],
+                'file' => $result['file'] ?? null,
+            ]);
+
+        case 'deleteProxmoxBackup':
+            $name = requireContainer();
+            $file = (string) ($_POST['file'] ?? '');
+            lxcJson(ProxmoxBackup::delete($name, $file), 'Proxmox backup deleted.');
+
+        case 'getDownloadLink':
+            $name = requireContainer();
+            $file = (string) ($_POST['file'] ?? '');
+            if (ProxmoxBackup::resolveBackupFile($name, $file) === null) {
+                lxcJson(false, 'Proxmox backup not found.');
+            }
+            $token = ProxmoxBackup::token($name, $file);
+            lxcJson(true, '/plugins/lxc/include/download-backup.php?container=' . urlencode($name)
+                . '&file=' . urlencode($file) . '&token=' . urlencode($token));
 
         default:
             lxcJson(false, 'Unknown action.');

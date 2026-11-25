@@ -6,6 +6,14 @@
 error_reporting(E_ALL);
 ini_set('display_errors', '1');
 
+// The webGui provides this translation helper; stub it for standalone runs.
+if (!function_exists('_')) {
+    function _(string $text): string
+    {
+        return $text;
+    }
+}
+
 if (!ini_get('short_open_tag')) {
     fwrite(STDERR, "short_open_tag must be enabled: php -d short_open_tag=1 tests/page_render_test.php\n");
     exit(1);
@@ -158,7 +166,7 @@ foreach (glob($pluginDir . '/*.page') ?: [] as $pageFile) {
     $csrfPages[] = basename($pageFile);
 }
 $expectedCsrfPages = [
-    'LXC.page', 'LXCAddContainer.page', 'LXCAddTemplate.page',
+    'LXC.page', 'LXCAddContainer.page', 'LXCAddTemplate.page', 'LXCBackups.page',
     'LXCCopyContainer.page', 'LXCDashboard.page', 'LXCRestoreBackup.page',
     'LXCRestoreSnapshot.page', 'LXCSettingsMain.page', 'LXCSnapshots.page',
 ];

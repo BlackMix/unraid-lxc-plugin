@@ -829,6 +829,65 @@ $(function() {
   });
 
   // Listener for add container from CA App
+  $(document).on('click', '.createProxmoxBackup', function () {
+    let container = $(this).attr('data-container');
+    let vmid = $('#px_vmid_' + container).val();
+    Shadowbox.open({
+      content: '<div id="dialogContent" class="logLine spacing"></div>',
+      player: 'html',
+      title: 'Create Proxmox Backup',
+      height: Math.min(screen.availHeight, 600),
+      width: Math.min(screen.availWidth, 1000)
+    });
+    waitForElement('#dialogContent', function () {
+      let dialogContent = $('#dialogContent');
+      dialogContent.append('<p>Creating Proxmox backup for ' + container + ' (container will be stopped and restarted)...</p>');
+      $.ajax({
+        type: 'POST',
+        url: '/plugins/lxc/include/ajax.php',
+        data: { 'lxc': '', 'action': 'createProxmoxBackup', 'container': container, 'vmid': vmid },
+        success: function (data) {
+          let result = lxcParseResponse(data);
+          let colour = result.ok ? 'green' : 'red';
+          dialogContent.append('<p style="color:' + colour + ';">' + $('<div>').text(result.message).html() + '</p>');
+          dialogContent.append('<p class="centered"><button class="logLine" type="button" onclick="top.Shadowbox.close(); location.reload();">Done</button></p>');
+        },
+        error: function (xhr) {
+          dialogContent.append('<p style="color:red;">Request failed (HTTP ' + xhr.status + ')</p>');
+          dialogContent.append('<p class="centered"><button class="logLine" type="button" onclick="top.Shadowbox.close(); location.reload();">Done</button></p>');
+        }
+      });
+    });
+  });
+
+  $(document).on('click', '.deleteProxmoxBackup', function () {
+    let container = $(this).attr('data-container');
+    let file = $(this).attr('data-file');
+    showDialog(function (confirm) {
+      if (confirm) {
+        $.post('/plugins/lxc/include/ajax.php', {
+          'lxc': '', 'action': 'deleteProxmoxBackup', 'container': container, 'file': file
+        }).always(function () { location.reload(); });
+      }
+    }, 'Delete Proxmox backup <span style="font-weight:bold">' + file + '</span>? This is IRREVERSIBLE.');
+  });
+
+  $(document).on('click', '.downloadProxmoxBackup', function (event) {
+    event.preventDefault();
+    let container = $(this).attr('data-container');
+    let file = $(this).attr('data-file');
+    $.post('/plugins/lxc/include/ajax.php', {
+      'lxc': '', 'action': 'getDownloadLink', 'container': container, 'file': file
+    }, function (data) {
+      let result = lxcParseResponse(data);
+      if (result.ok) {
+        window.location.href = result.message;
+      } else {
+        alert(result.message);
+      }
+    });
+  });
+
   $(document).on('submit','form#addContainerCAApp',function(event){
     event.preventDefault();
     let name = this.contName.value;

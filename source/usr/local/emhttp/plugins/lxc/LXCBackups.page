@@ -1,12 +1,22 @@
 Menu="LXC:2"
 Title="Backups"
 Tag="archive"
-Cond="exec(\"lxc-ls 2>/dev/null\") && parse_ini_file('/boot/config/plugins/lxc/plugin.cfg')['LXC_BACKUP_SERVICE'] == 'enabled'"
+Cond="exec(\"lxc-ls 2>/dev/null\")"
 ---
 <?php
-foreach ($allContainers as $container) { ?>
-        <h2><?= $container->name ?></h2>
+require_once '/usr/local/emhttp/plugins/lxc/include/ProxmoxBackup.php';
+$backupSettings = new Settings();
+$defaultVmid = (int) ($backupSettings->proxmox_vmid ?: 100);
+?>
+<?php require '/usr/local/emhttp/plugins/lxc/include/csrf.php' ?>
+<script src="<?autov('/plugins/lxc/js/lxc.js')?>"></script>
+
+<?php foreach ($allContainers as $container) { ?>
+        <h2><?= htmlspecialchars($container->name, ENT_QUOTES, 'UTF-8') ?></h2>
         <br>
+
+        <?php if ($backupSettings->backup_enabled === 'enabled') { ?>
+        <h3>LXC backups</h3>
         <table id="snapshot_table" class="tablesorter two shift">
             <thead>
             <tr>
@@ -17,24 +27,15 @@ foreach ($allContainers as $container) { ?>
             </thead>
             <tbody align="left">
 <?
-
         if (count($container->backups) > 0) {
           foreach ($container->backups as $backup) {
             ?>
             <tr style='height: 50px;'>
+              <td><?= $backup->name?></td>
+              <td><?= $backup->date ?> <?= $backup->time ?></td>
               <td>
-                <?= $backup->name?>
-              </td>
-              <td>
-                <?= $backup->date ?> <?= $backup->time ?>
-              </td>
-              <td>
-                <a href='/LXCRestoreBackup?cont=<?= $container->name?>&backup=<?= $backup->time ?>_<?= $backup->date ?>.tar.xz' class='button'>
-                  Create Container From Backup
-                </a>
-                <a href="#" class="button deleteBACKUP" id="<?= $container->name ?> <?= $backup->name ?>_<?= $backup->time ?>_<?= $backup->date ?>">
-                  Delete Backup
-                </a>
+                <a href='/LXCRestoreBackup?cont=<?= $container->name?>&backup=<?= $backup->time ?>_<?= $backup->date ?>.tar.xz' class='button'>Create Container From Backup</a>
+                <a href="#" class="button deleteBACKUP" id="<?= $container->name ?> <?= $backup->name ?>_<?= $backup->time ?>_<?= $backup->date ?>">Delete Backup</a>
               </td>
             </tr>
 <?php
@@ -42,7 +43,42 @@ foreach ($allContainers as $container) { ?>
         } else {
           echo "<tr style='height: 50px;'><td>No Backups</td><td>&nbsp;</td><td>&nbsp;</td><tr>";
         }
-          echo "</tbody></table>";
-}
+        echo "</tbody></table>";
+        }
+        ?>
 
+        <h3>Proxmox-compatible backups <small>(experimental)</small></h3>
+        <p style="font-size:9pt;opacity:.8;">
+          The container is stopped during the backup and restarted afterwards. Restore with
+          <code>pct restore &lt;vmid&gt; &lt;file&gt; --rootfs &lt;storage&gt;:&lt;size&gt;</code>.
+          The config uses a placeholder rootfs; override it at restore time. Validate with a real Proxmox before relying on it.
+        </p>
+        <div class="lxcv2-proxmox-create">
+          <label>VMID: <input type="number" min="100" max="999999999" id="px_vmid_<?= htmlspecialchars($container->name, ENT_QUOTES) ?>" value="<?= $defaultVmid ?>" style="width:120px"></label>
+          <input type="button" class="button createProxmoxBackup" value="Create Proxmox Backup" data-container="<?= htmlspecialchars($container->name, ENT_QUOTES) ?>">
+        </div>
+        <table class="tablesorter two shift" style="margin-top:8px;">
+          <thead><tr><th>File</th><th>VMID</th><th>Date</th><th>Size</th><th>Actions</th></tr></thead>
+          <tbody align="left">
+<?php
+        $pxBackups = ProxmoxBackup::list($container->name);
+        if ($pxBackups === []) {
+            echo "<tr><td colspan='5'>No Proxmox backups</td></tr>";
+        } else {
+            foreach ($pxBackups as $entry) {
+                $safeFile = htmlspecialchars($entry['file'], ENT_QUOTES, 'UTF-8');
+                echo '<tr style="height:40px;">'
+                    . '<td>' . $safeFile . '</td>'
+                    . '<td>' . $entry['vmid'] . '</td>'
+                    . '<td>' . htmlspecialchars(str_replace('_', ' ', $entry['stamp']), ENT_QUOTES) . '</td>'
+                    . '<td>' . round($entry['size'] / 1048576) . ' MiB</td>'
+                    . '<td>'
+                    . '<a href="#" class="button downloadProxmoxBackup" data-container="' . htmlspecialchars($container->name, ENT_QUOTES) . '" data-file="' . $safeFile . '">Download</a> '
+                    . '<a href="#" class="button deleteProxmoxBackup" data-container="' . htmlspecialchars($container->name, ENT_QUOTES) . '" data-file="' . $safeFile . '">Delete</a>'
+                    . '</td></tr>';
+            }
+        }
 ?>
+          </tbody>
+        </table>
+<?php } ?>
